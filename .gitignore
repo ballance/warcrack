@@ -1,0 +1,9 @@
+.DS_Store
+
+# Terraform local state/plugin cache (fetched providers). The provider lock
+# file is committed on purpose — it pins what terraform init resolves to.
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.log
