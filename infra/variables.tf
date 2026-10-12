@@ -9,3 +9,9 @@ variable "bucket_name" {
   type        = string
   default     = "warcrack-web-site"
 }
+
+variable "github_repo" {
+  description = "owner/name of the repo allowed to assume the deploy role."
+  type        = string
+  default     = "ballance/warcrack"
+}

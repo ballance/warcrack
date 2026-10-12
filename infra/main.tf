@@ -264,3 +264,85 @@ resource "aws_ssm_parameter" "distribution_id" {
   type  = "String"
   value = aws_cloudfront_distribution.site.id
 }
+
+# =============================================================================
+# OIDC deploy role — GitHub Actions assumes this to push index.html and
+# invalidate the distribution. Scoped to this one repo and to exactly the two
+# resources a deploy touches; it can do nothing else in the account.
+#
+# The OIDC provider itself is shared with the other bastionforge services, so
+# it is looked up rather than created. If this lookup errors, the provider has
+# not been registered in the account yet — see DEPLOY.md.
+# =============================================================================
+
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+}
+
+data "aws_iam_policy_document" "gha_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Branch-scoped would be tighter still, but workflow_dispatch from any ref
+    # needs to work, so this stays at repo scope like the other services.
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repo}:*"]
+    }
+  }
+}
+
+resource "aws_iam_role" "gha" {
+  name               = "gh-actions-warcrack-web"
+  description        = "GitHub Actions deploy role for ${var.hostname}"
+  assume_role_policy = data.aws_iam_policy_document.gha_assume.json
+}
+
+data "aws_iam_policy_document" "gha_deploy" {
+  statement {
+    sid = "SiteBucketReadWrite"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:DeleteObject",
+      "s3:ListBucket",
+    ]
+    resources = [
+      aws_s3_bucket.site.arn,
+      "${aws_s3_bucket.site.arn}/*",
+    ]
+  }
+
+  statement {
+    sid       = "InvalidateDistribution"
+    actions   = ["cloudfront:CreateInvalidation"]
+    resources = [aws_cloudfront_distribution.site.arn]
+  }
+
+  statement {
+    sid     = "ReadDeployTargets"
+    actions = ["ssm:GetParameter"]
+    resources = [
+      aws_ssm_parameter.site_bucket.arn,
+      aws_ssm_parameter.distribution_id.arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "gha_deploy" {
+  name   = "deploy"
+  role   = aws_iam_role.gha.id
+  policy = data.aws_iam_policy_document.gha_deploy.json
+}

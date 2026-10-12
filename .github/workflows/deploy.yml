@@ -1,0 +1,67 @@
+name: deploy
+on:
+  push:
+    branches: [master]
+    paths: ["index.html"]
+  workflow_dispatch:
+concurrency: { group: deploy, cancel-in-progress: true }
+permissions: { id-token: write, contents: read }
+env:
+  AWS_REGION: us-east-1
+  SITE_HOST: warcrack.bastionforge.com
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: { name: production, url: https://warcrack.bastionforge.com }
+    steps:
+      - uses: actions/checkout@v4
+
+      # The whole premise of this game is that it is one self-contained file.
+      # Catch a regression here rather than on the live site.
+      - name: Check the game is still self-contained
+        run: |
+          set -euo pipefail
+          bytes=$(wc -c <index.html | tr -d ' ')
+          [ "$bytes" -gt 100000 ] || { echo "::error::index.html is only ${bytes}B — not the full game"; exit 1; }
+          grep -q 'EMBERFALL' index.html || { echo "::error::no title banner found in index.html"; exit 1; }
+          if grep -qiE '<script[^>]+src=|<link[^>]+href="https?:' index.html; then
+            echo "::error::index.html references an external asset — it must stay self-contained"
+            exit 1
+          fi
+          echo "index.html is self-contained (${bytes} bytes)"
+
+      # A syntax error in the inline script is invisible until the page loads,
+      # so parse it here. This is the check that would have caught an undeclared
+      # global slipping past "use strict".
+      - name: Syntax-check the inline script
+        run: |
+          set -euo pipefail
+          python3 -c "s=open('index.html').read(); a=s.index('<script>')+8; b=s.rindex('</script>'); open('/tmp/game.js','w').write(s[a:b])"
+          node --check /tmp/game.js
+          echo "inline script parses"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::807135474710:role/gh-actions-warcrack-web
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload and invalidate
+        run: |
+          set -euo pipefail
+          BUCKET=$(aws ssm get-parameter --name /warcrack-web/site-bucket --query Parameter.Value --output text)
+          DIST=$(aws ssm get-parameter --name /warcrack-web/distribution-id --query Parameter.Value --output text)
+          aws s3 cp index.html "s3://$BUCKET/index.html" \
+            --content-type "text/html; charset=utf-8" \
+            --cache-control "public, max-age=300" \
+            --only-show-errors
+          INV=$(aws cloudfront create-invalidation --distribution-id "$DIST" \
+            --paths '/*' --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DIST" --id "$INV"
+          echo "uploaded to $BUCKET, invalidation $INV complete"
+
+      - name: Verify the live URL
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://${SITE_HOST}/")
+          [ "$code" = "200" ] || { echo "::error::https://${SITE_HOST}/ returned HTTP $code"; exit 1; }
+          echo "live: https://${SITE_HOST}/"

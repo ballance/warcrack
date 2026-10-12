@@ -17,3 +17,8 @@ output "game_url" {
   description = "Public URL the game is served from."
   value       = "https://${var.hostname}"
 }
+
+output "deploy_role_arn" {
+  description = "Role GitHub Actions assumes — paste into .github/workflows/deploy.yml."
+  value       = aws_iam_role.gha.arn
+}

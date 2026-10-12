@@ -18,6 +18,7 @@ possible — the hosting is still just "a file in S3".
 | ACM cert | `warcrack.bastionforge.com`, DNS-validated |
 | Route 53 | `warcrack` A + AAAA aliases → CloudFront |
 | SSM | `/warcrack-web/site-bucket`, `/warcrack-web/distribution-id` |
+| IAM | `gh-actions-warcrack-web` — OIDC role for the deploy workflow |
 
 Terraform state: `s3://ballance-terraform-state/services/warcrack-web.tfstate`,
 locked with the `terraform-state-lock` DynamoDB table.
@@ -38,7 +39,7 @@ aws sts get-caller-identity       # must report account 807135474710
 ```bash
 cd infra
 terraform init
-terraform plan        # expect ~16 resources to add, 0 to change, 0 to destroy
+terraform plan        # expect ~18 resources to add, 0 to change, 0 to destroy
 terraform apply
 ```
 
@@ -107,9 +108,34 @@ removed: `aws s3 rm s3://warcrack-web-site --recursive` clears current objects,
 then delete the noncurrent versions (or wait out the 90-day lifecycle rule)
 before re-running.
 
-## Not included
+## Continuous deployment
 
-No GitHub Actions workflow or OIDC deploy role — this directory is not a git
-repo yet. If it becomes one, copy the `gha_web*` role and the
-`.github/workflows/web-deploy.yml` job from `datum`; the SSM parameter names
-above are the same ones that workflow expects.
+`.github/workflows/deploy.yml` deploys on every push to `master` that touches
+`index.html`, and on manual dispatch. It assumes `gh-actions-warcrack-web`
+through GitHub's OIDC provider — no long-lived keys in the repo — and that role
+can do exactly three things: read/write this one bucket, invalidate this one
+distribution, and read the two SSM parameters. Nothing else in the account.
+
+Before it can run, the infrastructure has to exist. The workflow deliberately
+does **not** trigger on changes to itself, so adding or editing it never fires
+a run that would fail at the assume-role step; after the first successful
+`terraform apply`, add `.github/workflows/deploy.yml` to the `paths:` list if
+you want workflow edits to redeploy too.
+
+The two gate steps run before any AWS call: the file must still be
+self-contained (no external `<script src>` or remote stylesheet, no truncation)
+and the inline script must parse under `node --check`. A syntax error in a
+220 KB inline script is otherwise invisible until someone loads the page.
+
+The role ARN is hardcoded in the workflow, matching the other bastionforge
+services. `terraform output deploy_role_arn` prints it if it ever needs
+changing; a repo variable would work equally well.
+
+### If the OIDC provider lookup fails
+
+`data.aws_iam_openid_connect_provider.github` expects
+`token.actions.githubusercontent.com` to already be registered in the account —
+it is, shared with the other services. If that ever stops being true, register
+it once (`aws iam create-open-id-connect-provider --url
+https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com`)
+rather than letting each service create its own.
