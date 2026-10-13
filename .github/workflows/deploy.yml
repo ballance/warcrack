@@ -42,7 +42,9 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::807135474710:role/gh-actions-warcrack-web
+          # Repo secret, so the account id stays out of a public repo.
+          # Value comes from: terraform -chdir=infra output -raw deploy_role_arn
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Upload and invalidate

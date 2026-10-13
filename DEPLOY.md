@@ -3,7 +3,7 @@
 Static hosting, same shape as the other bastionforge sites: a **private S3
 bucket** that only **CloudFront** can read (OAC), an **ACM** cert validated
 through **Route 53**, and A/AAAA aliases on the `bastionforge.com` hosted zone
-in account `807135474710`.
+in the bastionforge AWS account.
 
 The bucket is private on purpose. S3's own website endpoint cannot serve HTTPS
 on a custom domain, so CloudFront is what makes `https://warcrack.bastionforge.com`
@@ -31,7 +31,7 @@ hundred CloudFront requests. ACM certs and the hosted zone are already paid for.
 ```bash
 brew install awscli terraform     # neither is currently on this machine
 aws configure                     # or: aws configure sso / export AWS_PROFILE=...
-aws sts get-caller-identity       # must report account 807135474710
+aws sts get-caller-identity       # must report the bastionforge account
 ```
 
 ## First deploy
@@ -127,9 +127,15 @@ self-contained (no external `<script src>` or remote stylesheet, no truncation)
 and the inline script must parse under `node --check`. A syntax error in a
 220 KB inline script is otherwise invisible until someone loads the page.
 
-The role ARN is hardcoded in the workflow, matching the other bastionforge
-services. `terraform output deploy_role_arn` prints it if it ever needs
-changing; a repo variable would work equally well.
+The role ARN lives in the `AWS_DEPLOY_ROLE_ARN` repo secret rather than in the
+workflow file — this repo is public, and an account id in a public repo is one
+more thing an attacker does not need handed to them. The other bastionforge
+services inline it because their repos are private. To set or rotate it:
+
+```bash
+gh secret set AWS_DEPLOY_ROLE_ARN \
+  --body "$(terraform -chdir=infra output -raw deploy_role_arn)"
+```
 
 ### If the OIDC provider lookup fails
 
