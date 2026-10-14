@@ -82,6 +82,13 @@ canvas{display:block}
 #tip .cost{color:#e8c870;font-size:11px}
 #tip .hot{color:#9fd3ff;font-size:11px}
 #tip .warn{color:#ff8a7a;font-size:11px}
+#cheatBar{position:absolute;left:10px;bottom:186px;width:330px;display:none;z-index:30;
+  background:rgba(12,10,8,.95);border:1px solid #8a6f3e;border-radius:4px;padding:5px 8px;
+  box-shadow:0 4px 14px rgba(0,0,0,.7)}
+#cheatBar.show{display:block}
+#cheatBar label{color:#f0d9a0;font-size:12px;margin-right:6px}
+#cheatBar input{width:235px;background:#15120f;border:1px solid #5a4a33;color:#f0e4c4;
+  padding:3px 6px;border-radius:3px;font-family:inherit;font-size:12px}
 #msgs{position:absolute;left:10px;top:44px;font-size:13px;z-index:20;text-shadow:0 1px 3px #000}
 #msgs div{margin-bottom:3px;color:#ffd9a0;animation:fade 7s forwards}
 @keyframes fade{0%{opacity:1}75%{opacity:1}100%{opacity:0}}
@@ -166,6 +173,8 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   </div>
 
   <div id="msgs"></div>
+
+  <div id="cheatBar"><label for="cheatIn">cheat</label><input type="text" id="cheatIn" autocomplete="off" spellcheck="false"></div>
 
   <div id="hud">
     <div id="mmwrap" class="panel"><canvas id="minimap" width="96" height="96"></canvas></div>
@@ -323,7 +332,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-14 · audio-fix';
+const BUILD = '2026-10-14 · cheats';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -6364,7 +6373,9 @@ const EL = {
   endTitle: document.getElementById('endTitle'),
   endSub: document.getElementById('endSub'),
   endStats: document.getElementById('endStats'),
-  seedIn: document.getElementById('seedIn')
+  seedIn: document.getElementById('seedIn'),
+  cheatBar: document.getElementById('cheatBar'),
+  cheatIn: document.getElementById('cheatIn')
 };
 const pctx = EL.portrait.getContext('2d');
 
@@ -6832,6 +6843,52 @@ function rankSel(e) {
   return 3;
 }
 
+/* ---------- cheat codes ----------
+   Entered through a one-line bar rather than a raw key sequence: the letters in
+   any decent cheat word collide with the command hotkeys (H holds position, L
+   opens the skill menu, A is attack-move), so typing one in the open would order
+   your army around. The keydown handler already ignores everything while an
+   <input> has focus, so the bar suppresses hotkeys for free. */
+const CHEATS = {
+  holdtheline: {
+    desc: 'A Footman reports for duty.',
+    run() {
+      const p = G.players[0];
+      const home = playerBuildings(p).find(b => b.def.dropoff && b.built) || playerBuildings(p)[0];
+      const at = home
+        ? freeSpotNear(home.x, home.y + home.th * TILE * 0.5 + 20, 8)
+        : freeSpotNear(G.cam.x + view.w / G.cam.z / 2, G.cam.y + view.h / G.cam.z / 2, 10);
+      const u = spawnUnit('footman', 0, at.x, at.y);
+      recomputeFood(p);
+      p.stats.trained++;
+      setOrder(u, { t: 'move', x: at.x + (G.rnd() - 0.5) * 50, y: at.y + 24 });
+      pushEffect('levelup', at.x, at.y, 0.8);
+      sfx('ready');
+      return unitDisplayName(u) + ' reports for duty.';
+    }
+  }
+};
+function runCheat(raw) {
+  const code = String(raw || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!code) return;
+  const c = CHEATS[code];
+  if (!c) { addMsg('Nothing answers.'); sfx('nope'); return; }
+  const msg = c.run();
+  addMsg(msg || c.desc);
+}
+function cheatBarOpen() { return EL.cheatBar && EL.cheatBar.classList.contains('show'); }
+function openCheatBar() {
+  if (!EL.cheatBar) return;
+  EL.cheatBar.classList.add('show');
+  EL.cheatIn.value = '';
+  EL.cheatIn.focus();
+}
+function closeCheatBar() {
+  if (!EL.cheatBar) return;
+  EL.cheatBar.classList.remove('show');
+  EL.cheatIn.blur();
+}
+
 /* ============================== 21. INPUT ============================== */
 const input = {
   mx: 0, my: 0, worldX: 0, worldY: 0,
@@ -7091,6 +7148,7 @@ window.addEventListener('keydown', (ev) => {
   }
   if (key === 'F10') { ev.preventDefault(); openHelp(); return; }
   if (!G || G.state !== 'play') return;
+  if (key === 'Enter') { ev.preventDefault(); openCheatBar(); return; }
 
   // control groups
   if (/^[1-9]$/.test(key)) {
@@ -7160,6 +7218,16 @@ window.addEventListener('keyup', (ev) => {
   delete input.keys[key.length === 1 ? key.toLowerCase() : key];
 });
 window.addEventListener('blur', () => { input.keys = Object.create(null); });
+
+/* the cheat bar owns its own keys while it has focus */
+if (EL.cheatIn) {
+  EL.cheatIn.addEventListener('keydown', (ev) => {
+    ev.stopPropagation();
+    if (ev.key === 'Enter') { ev.preventDefault(); const v = EL.cheatIn.value; closeCheatBar(); runCheat(v); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); closeCheatBar(); }
+  });
+  EL.cheatIn.addEventListener('blur', () => closeCheatBar());
+}
 
 /* ============================== 22. GAME FLOW ============================== */
 function makePlayer(id) {
