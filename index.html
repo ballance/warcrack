@@ -213,6 +213,7 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
       <button class="mbtn" id="btnHelp">How to Play</button>
     </div>
     <p class="hint" style="margin-top:14px">Tip: fresh Laborers walk to the nearest gold seam on their own &mdash; right-click the black pines to put some on lumber.</p>
+    <p class="hint" id="buildStamp" style="margin-top:6px;opacity:.6"></p>
     <p class="hint" id="touchNote" style="display:none;color:#ffb98a">Mouse and keyboard game. On a narrow screen the panels compress and the command card still works, but a desktop browser is strongly recommended.</p>
   </div>
 </div>
@@ -318,6 +319,11 @@ const CONFIG = {
   camScroll: 760,
   camEdge: 14
 };
+
+/* Bump on every deploy. When someone reports a bug, the console line tells us
+   whether they are on this build or a cached one — GitHub Pages serves with
+   max-age=600, so a stale copy is the first thing to rule out. */
+const BUILD = '2026-10-14 · audio-fix';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -7180,6 +7186,9 @@ document.querySelectorAll('[data-diff]').forEach(b => {
   });
 });
 EL.seedIn.value = randomSeedText();
+console.log('%cEmberfall%c build ' + BUILD, 'font-weight:bold;color:#f6d98c', 'color:#999');
+const buildEl = document.getElementById('buildStamp');
+if (buildEl) buildEl.textContent = 'build ' + BUILD;
 if (window.matchMedia && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 820)) {
   const tn = document.getElementById('touchNote');
   if (tn) tn.style.display = 'block';
