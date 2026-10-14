@@ -5600,8 +5600,11 @@ function drawBuildingShape(b, x, y) {
 
   switch (b.type) {
     case 'hall':
+      drawTownHall(b, x, y, w, h, f, flash);
+      break;
+
     case 'keep':
-      drawCastle(b, x, y, w, h, f, b.type === 'keep', flash);
+      drawCastle(b, x, y, w, h, f, flash);
       break;
     case 'farm': {
       ctx.fillRect(x0 + 4, y0 + 12, w - 8, h - 16);
@@ -5882,10 +5885,162 @@ function drawTurret(tx, ty, r, roofH, f, spiky, lo, mid, hi) {
   }
 }
 
-/* Town Hall / Keep: curtain wall with crenellations, drum towers under conical
-   roofs, a gatehouse with a portcullis, and a central donjon. Tier two adds the
-   back pair of towers, a taller donjon and banners. */
-function drawCastle(b, x, y, w, h, f, keep, flash) {
+/* Town Hall: a civic meeting hall, not a fortress. Big gabled roof with a bell
+   cupola on the ridge, stone chimneys, a wide stepped entrance, and — since this
+   is where Laborers deposit gold and lumber — a working yard stacked with the
+   goods they bring in. Shares the timber frame, corner blocks and team-coloured
+   ridge beam with the Barracks so one faction reads as one builder. */
+function drawTownHall(b, x, y, w, h, f, flash) {
+  const x0 = x - w / 2, y0 = y - h / 2;
+  const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
+  const roof = flash ? '#c08a78' : '#8a5338';
+  const roofLit = flash ? '#d49c88' : '#9c6446';
+  const roofDark = '#6b3f2a';
+  const stone = '#b8b0a2', stoneDark = '#8c8478';
+  const yard = '#c9a878', yardLine = '#b09060';
+  const ink = 'rgba(18,14,10,.95)';
+  const splitX = x0 + w * 0.68;
+
+  // --- dropoff yard: what the Laborers are carrying in ---
+  ctx.fillStyle = yard;
+  ctx.fillRect(splitX, y0 + 5, x0 + w - 5 - splitX, h - 10);
+  ctx.strokeStyle = yardLine; ctx.lineWidth = 1;
+  for (let i = 1; i < 7; i++) {
+    ctx.beginPath();
+    ctx.moveTo(splitX, y0 + 5 + i * (h - 10) / 7);
+    ctx.lineTo(x0 + w - 5, y0 + 5 + i * (h - 10) / 7);
+    ctx.stroke();
+  }
+  const ycx = splitX + (x0 + w - 5 - splitX) / 2;
+  // stacked lumber, log ends toward the viewer
+  ctx.fillStyle = '#7a5c38';
+  ctx.fillRect(ycx - 15, y0 + 14, 30, 20);
+  ctx.fillStyle = '#a07840';
+  for (let r2 = 0; r2 < 2; r2++) {
+    for (let c2 = 0; c2 < 3; c2++) {
+      ctx.beginPath();
+      ctx.arc(ycx - 9 + c2 * 9, y0 + 20 + r2 * 9, 4, 0, 6.3);
+      ctx.fill();
+      ctx.strokeStyle = '#6b4e28'; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+  // gold sacks
+  ctx.fillStyle = '#9a8150';
+  for (const sx of [-10, 2, 13]) {
+    ctx.beginPath();
+    ctx.ellipse(ycx + sx, y0 + 50, 7, 9, 0, 0, 6.3);
+    ctx.fill();
+    ctx.strokeStyle = ink; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = '#f2c23a';
+    ctx.beginPath(); ctx.arc(ycx + sx, y0 + 44, 3, 0, 6.3); ctx.fill();
+    ctx.fillStyle = '#9a8150';
+  }
+  // handcart
+  ctx.fillStyle = beamMid;
+  ctx.fillRect(ycx - 14, y0 + h - 34, 28, 16);
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+  ctx.strokeRect(ycx - 14, y0 + h - 34, 28, 16);
+  ctx.fillStyle = beamDark;
+  ctx.beginPath(); ctx.arc(ycx - 9, y0 + h - 16, 5, 0, 6.3); ctx.fill();
+  ctx.beginPath(); ctx.arc(ycx + 9, y0 + h - 16, 5, 0, 6.3); ctx.fill();
+
+  // --- the hall: gabled roof, ridge running top to bottom ---
+  const rx0 = x0 + 5, rx1 = splitX, ridge = (rx0 + rx1) / 2;
+  ctx.fillStyle = roofLit;
+  ctx.fillRect(rx0, y0 + 5, ridge - rx0, h - 10);
+  ctx.fillStyle = roof;
+  ctx.fillRect(ridge, y0 + 5, rx1 - ridge, h - 10);
+  ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 1;
+  for (let row = 0; row < 13; row++) {
+    const ry = y0 + 9 + row * (h - 14) / 13;
+    ctx.beginPath(); ctx.moveTo(rx0, ry); ctx.lineTo(rx1, ry); ctx.stroke();
+    for (let cI = 0; cI < 6; cI++) {
+      const cxp = rx0 + ((row % 2) ? 6 : 0) + cI * (rx1 - rx0) / 6;
+      if (cxp <= rx1 - 2) {
+        ctx.beginPath(); ctx.moveTo(cxp, ry); ctx.lineTo(cxp, ry + (h - 14) / 13); ctx.stroke();
+      }
+    }
+  }
+  // team-coloured ridge beam with cleats
+  ctx.fillStyle = f.color;
+  ctx.fillRect(ridge - 4, y0 + 4, 8, h - 8);
+  ctx.fillStyle = f.light;
+  ctx.fillRect(ridge - 4, y0 + 4, 2.5, h - 8);
+  ctx.fillStyle = beam;
+  for (let i = 0; i < 5; i++) ctx.fillRect(ridge - 7, y0 + 14 + i * (h - 30) / 4, 14, 6);
+
+  // --- bell cupola on the ridge: the civic signature ---
+  const cuy = y0 + h * 0.42;
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.beginPath(); ctx.ellipse(ridge + 3, cuy + 3, 17, 17, 0, 0, 6.3); ctx.fill();
+  ctx.fillStyle = beamMid;
+  ctx.beginPath(); ctx.arc(ridge, cuy, 16, 0, 6.3); ctx.fill();
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.8; ctx.stroke();
+  ctx.fillStyle = roofDark;
+  ctx.beginPath(); ctx.arc(ridge, cuy, 12, 0, 6.3); ctx.fill();
+  ctx.fillStyle = f.color;                       // cupola roof catching light
+  ctx.beginPath(); ctx.arc(ridge - 2, cuy - 2, 9, 0, 6.3); ctx.fill();
+  ctx.fillStyle = '#d9b84a';                     // the bell
+  ctx.beginPath();
+  ctx.moveTo(ridge, cuy - 5);
+  ctx.quadraticCurveTo(ridge + 6, cuy + 2, ridge + 5, cuy + 6);
+  ctx.lineTo(ridge - 5, cuy + 6);
+  ctx.quadraticCurveTo(ridge - 6, cuy + 2, ridge, cuy - 5);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.fillStyle = '#8a6a22';
+  ctx.beginPath(); ctx.arc(ridge, cuy + 8, 2, 0, 6.3); ctx.fill();
+
+  // --- stone chimneys ---
+  for (const [cxp, cyp] of [[rx0 + 9, y0 + 16], [rx0 + 9, y0 + h - 32]]) {
+    ctx.fillStyle = stone;
+    ctx.fillRect(cxp, cyp, 16, 16);
+    ctx.strokeStyle = ink; ctx.lineWidth = 1.4;
+    ctx.strokeRect(cxp, cyp, 16, 16);
+    ctx.fillStyle = '#1a1510';
+    ctx.fillRect(cxp + 5, cyp + 5, 6, 6);
+  }
+
+  // --- wide stepped entrance at the eave ---
+  ctx.fillStyle = stoneDark;
+  ctx.fillRect(ridge - 20, y0 + h - 14, 40, 12);
+  ctx.fillStyle = stone;
+  ctx.fillRect(ridge - 16, y0 + h - 12, 32, 4);
+  ctx.fillRect(ridge - 12, y0 + h - 7, 24, 4);
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+  ctx.strokeRect(ridge - 20, y0 + h - 14, 40, 12);
+  ctx.fillStyle = '#3a2a1c';                     // doors under the eave
+  ctx.fillRect(ridge - 11, y0 + h - 24, 22, 11);
+  ctx.strokeStyle = beamDark; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(ridge, y0 + h - 24); ctx.lineTo(ridge, y0 + h - 13); ctx.stroke();
+
+  // --- timber frame and corner blocks, matching the Barracks ---
+  ctx.fillStyle = beamMid;
+  ctx.fillRect(x0 + 2, y0 + 2, w - 4, 7);
+  ctx.fillRect(x0 + 2, y0 + h - 9, w - 4, 7);
+  ctx.fillRect(x0 + 2, y0 + 2, 7, h - 4);
+  ctx.fillRect(x0 + w - 9, y0 + 2, 7, h - 4);
+  ctx.fillStyle = beamDark;
+  ctx.fillRect(splitX - 3, y0 + 2, 6, h - 4);
+  ctx.fillStyle = corner;
+  const blocks = [[x0 + 1, y0 + 1], [x0 + w - 12, y0 + 1], [x0 + 1, y0 + h - 12],
+                  [x0 + w - 12, y0 + h - 12], [splitX - 5, y0 + 1], [splitX - 5, y0 + h - 12],
+                  [x0 + 1, y0 + h / 2 - 5], [x0 + w - 12, y0 + h / 2 - 5],
+                  [x0 + w / 3, y0 + 1], [x0 + w / 3, y0 + h - 12]];
+  for (const bl of blocks) {
+    ctx.fillRect(bl[0], bl[1], 11, 11);
+    ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+    ctx.strokeRect(bl[0], bl[1], 11, 11);
+  }
+  drawFlag(x0 + w - 7, y0 + 7, f);
+}
+
+/* The Keep: curtain wall with crenellations, drum towers under conical roofs, a
+   gatehouse with a portcullis, and a central donjon. This is tier two only — the
+   Town Hall it upgrades from is a civic hall, so the upgrade reads as a
+   settlement fortifying itself rather than a small castle becoming a big one. */
+function drawCastle(b, x, y, w, h, f, flash) {
+  const keep = true;   // the Keep is the only caller now — the Town Hall is civic
   const x0 = x - w / 2, y0 = y - h / 2;
   const lo = flash ? '#e8bdb2' : '#453e34';
   const mid = flash ? '#ffded5' : '#7b7260';

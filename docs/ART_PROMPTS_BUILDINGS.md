@@ -87,10 +87,20 @@ Shared masonry palette already in the code: `#9a8a72` lit, `#74664f` mid,
 
 # Already done
 
-**Town Hall** and **Keep** got a pass earlier — curtain wall with crenellations,
-drum towers under conical roofs, a gatehouse with a portcullis, central donjon,
-and banners. Worth a reference eventually if you want them re-examined, but
-they're the only two that aren't first-draft.
+**Keep** — curtain wall with crenellations, drum towers under conical roofs, a
+gatehouse with a portcullis, central donjon, banners. Tier two, and the only
+building that should read as a fortress.
+
+**Town Hall** — a civic hall, deliberately *not* a small castle. Gabled roof with
+a bell cupola on the ridge, stone chimneys, a wide stepped entrance, and a
+working yard stacked with lumber, gold sacks and a handcart, because this is
+where Laborers deposit what they gather.
+
+Both were originally drawn by one shared function with a tier flag, which made
+the Town Hall a smaller fortress and wasted the upgrade. They are separate
+functions now: a settlement that *fortifies itself* is a much better moment than
+a small castle becoming a big one. If a building ever needs to show tier
+progression, this is the pattern — change the building's nature, not its size.
 
 ---
 
