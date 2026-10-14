@@ -3055,7 +3055,7 @@ function makeAI(p) {
 
 /* ============================== 17. AUDIO (procedural) ============================== */
 const SND = {
-  ctx: null, master: null, muted: false, vol: 0.6, last: Object.create(null), noise: null
+  ctx: null, master: null, muted: false, vol: 0.6, last: Object.create(null), noise: null, faulted: false
 };
 function sfxInit() {
   if (SND.ctx) return;
@@ -3095,7 +3095,8 @@ function noiseBurst(dur, gain, f0, f1, q, delay) {
   const s = SND.ctx.createBufferSource();
   s.buffer = SND.noise;
   const bp = SND.ctx.createBiquadFilter();
-  bp.type = 'bandpass'; bp.Q = q || 1.2;
+  bp.type = 'bandpass';
+  bp.Q.value = q || 1.2;        // Q is an AudioParam — assigning to it directly throws
   bp.frequency.setValueAtTime(f0, t0);
   if (f1) bp.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
   const g = SND.ctx.createGain();
@@ -3106,7 +3107,20 @@ function noiseBurst(dur, gain, f0, f1, q, delay) {
 }
 const SFX_GAP = { hit: 0.055, die: 0.09, boom: 0.09, select: 0.05, ack: 0.06, cast: 0.08 };
 function sfx(name, volScale) {
-  if (!SND.ctx || SND.muted) return;
+  try { sfxInner(name, volScale); } catch (err) { audioFault(err); }
+}
+/* One bad Web Audio call used to take the whole game down with it: sfx is
+   reached from performAttack, deep inside the simulation tick. Sound is never
+   worth a frozen game, so failures here disable audio and are reported once. */
+function audioFault(err) {
+  if (!SND.faulted) {
+    SND.faulted = true;
+    console.error('Emberfall: audio disabled after an error —', err);
+    if (typeof addMsg === 'function') addMsg('Sound disabled (audio error).');
+  }
+}
+function sfxInner(name, volScale) {
+  if (!SND.ctx || SND.muted || SND.faulted) return;
   const now = SND.ctx.currentTime;
   const gap = SFX_GAP[name] || 0.03;
   if (SND.last[name] && now - SND.last[name] < gap) return;
@@ -3141,7 +3155,7 @@ function sfx(name, volScale) {
   }
 }
 function sfxAt(name, x, y) {
-  if (!SND.ctx || SND.muted || !G) return;
+  if (!SND.ctx || SND.muted || SND.faulted || !G) return;
   const cam = G.cam;
   const sx = (x - cam.x) * cam.z, sy = (y - cam.y) * cam.z;
   if (sx < -200 || sy < -200 || sx > view.w + 200 || sy > view.h + 200) return;
@@ -7205,7 +7219,18 @@ btnMute2.addEventListener('click', toggleMute);
 
 /* --- main loop --- */
 let lastT = performance.now(), acc = 0, uiAcc = 0, mmAcc = 0;
+let frameFaults = 0;
 function frame(now) {
+  // Scheduled first on purpose: this used to sit at the end, so a single
+  // exception anywhere below permanently stopped the game.
+  requestAnimationFrame(frame);
+  try { frameBody(now); } catch (err) {
+    frameFaults++;
+    if (frameFaults <= 3) console.error('Emberfall: frame error —', err);
+    if (frameFaults === 3) console.error('Emberfall: further frame errors suppressed');
+  }
+}
+function frameBody(now) {
   const dtms = Math.min(250, now - lastT);
   lastT = now;
   const dt = dtms / 1000;
@@ -7229,7 +7254,6 @@ function frame(now) {
     mmAcc += dt;
     if (mmAcc > 0.06) { mmAcc = 0; drawMinimap(); }
   }
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
