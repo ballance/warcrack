@@ -399,7 +399,6 @@ references changed most often, in order:
 
 ## Not covered here
 
-Buildings, terrain, projectiles and ability effects. Say the word and I'll write
-the same thing for the eight buildings — the Town Hall and Keep already got a
-pass, but the Farm, Barracks, Workshop, Altar, Tower and Blacksmith are all still
-first-draft.
+Terrain, projectiles and ability effects.
+
+Buildings have their own document: **[ART_PROMPTS_BUILDINGS.md](ART_PROMPTS_BUILDINGS.md)**.

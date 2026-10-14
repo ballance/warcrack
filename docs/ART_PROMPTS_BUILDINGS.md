@@ -1,0 +1,236 @@
+# Building art prompts
+
+Companion to [ART_PROMPTS.md](ART_PROMPTS.md), which covers the nine characters
+and is complete. Same workflow: run a prompt, paste the result back into the
+session, I redraw the canvas code to match.
+
+## How buildings differ from characters
+
+Three things change, and they change what makes a useful reference.
+
+**One view, not two.** Characters needed a map sprite *and* a portrait bust,
+because a 20px sprite scaled up looks like nothing. Buildings are drawn once and
+that same drawing is scaled down into the command panel. So I need **one
+top-down reference** per building. A three-quarter view is welcome as a *second*
+image if the form is hard to read from above, but the overhead one is what gets
+implemented.
+
+**They are big.** A unit is ~20px tall. Buildings are three to six times that:
+
+| Footprint | Pixels | Buildings |
+| --- | --- | --- |
+| 2×2 tiles | 64 × 64 | Farm, Guard Tower |
+| 3×3 tiles | 96 × 96 | Barracks, Workshop, Altar, Blacksmith |
+| 4×4 tiles | 128 × 128 | Town Hall, Keep |
+
+At 96px, detail that was wasted on a Footman survives easily — shingles, beams,
+window frames, tool racks. Reference them generously.
+
+**The roof is the design.** From directly overhead you mostly see roof, so roof
+shape, pitch, material and colour carry nearly the whole read. Two buildings with
+identical footprints are told apart by their roofs and by what spills out around
+them — a woodpile, an anvil, a training dummy, a hanging banner.
+
+## What must stay readable
+
+Every building has to carry its state at a glance. When judging a reference, ask
+whether these would still work:
+
+- **Under construction** — I draw a scaffold and a progress bar over the top, so
+  the roof should not be the only thing identifying it
+- **Producing / researching / reviving** — progress bars overlay the lower edge
+- **Damaged** — a health bar sits above it
+- **Team colour** — needs a clear home: banner, roof ridge, awning, pennant
+- **Footprint** — the building sits inside a square. It may overhang slightly,
+  but a 3×3 whose art sprawls over 4 tiles will look wrong against the
+  placement grid, which the player sees as a green/red ghost
+
+## Shared style block
+
+Paste in front of every prompt:
+
+> Top-down orthographic view looking straight down at a single fantasy building,
+> centred, complete, nothing cropped. Flat shading with hard light from the upper
+> left, limited palette, heavy dark outline, clear silhouette. Plain neutral grey
+> background, no ground, no shadow, no surrounding terrain, no characters, no
+> text, no watermark, no UI.
+
+Negative prompt:
+
+> isometric, perspective, eye-level, photorealistic, soft focus, bloom, busy
+> background, landscape, scenery, people, text, watermark, cropped
+
+Two notes carried over from the character set, both of which cost us output
+quality when missed:
+
+- **Say "top-down orthographic, looking straight down"** and say it first. Models
+  default to three-quarter isometric for buildings even harder than they default
+  to eye-level for characters.
+- **Don't name an existing game.** It collapses the result toward that style and
+  you stop getting anything specific to Emberfall.
+
+## The two factions
+
+| | Primary | Dark | Light |
+| --- | --- | --- | --- |
+| **The Ember Accord** (player) | `#5aa9ff` | `#1b3f70` | `#bcdcff` |
+| **The Thornkin** (AI) | `#e05a4a` | `#5e1f16` | `#ffc3b4` |
+
+One prompt per building is enough — I derive the Thornkin variant. Accord
+buildings are squared timber, ember-brick and clean banners; Thornkin are the
+same plan rebuilt in lashed branches, thorn and bone.
+
+Shared masonry palette already in the code: `#9a8a72` lit, `#74664f` mid,
+`#4b4134` dark, with `#7a6238` scaffold timber.
+
+---
+
+# Already done
+
+**Town Hall** and **Keep** got a pass earlier — curtain wall with crenellations,
+drum towers under conical roofs, a gatehouse with a portcullis, central donjon,
+and banners. Worth a reference eventually if you want them re-examined, but
+they're the only two that aren't first-draft.
+
+---
+
+# 1. Farm — "Bramble Warren"
+
+2×2, 64 × 64 px. Grants +6 food. The most numerous building on any map — you
+will see eight of these at once, so it has to stay quiet and not fight the eye.
+
+> Top-down orthographic view of a small fantasy farmstead: a thatched longhouse
+> with a steep pitched roof, a fenced pen alongside holding a vegetable plot in
+> tidy rows, a haystack, a water trough. Humble, rural, weathered timber.
+
+Current palette: roof `#8a6a3a`, thatch `#c3a85f`. Team colour: roof ridge band.
+
+**What I most need:** a roof shape distinct enough that a cluster of farms doesn't
+read as one blob. Pitch direction, a chimney, something asymmetric.
+
+---
+
+# 2. Barracks — "Howling Pen"
+
+3×3, 96 × 96 px. Trains Footmen and Archers.
+
+> Top-down orthographic view of a fantasy military barracks: a long hall with a
+> shingled gable roof, a stone chimney, an open training yard at one end with a
+> weapon rack and a straw practice dummy, a banner pole at the corner. Solid,
+> disciplined, built to last.
+
+Current palette: roof `#3a3026`, weapon steel `#cfd4de`. Team colour: roof band
+and banner.
+
+**What I most need:** the training yard. Right now the Barracks is a box with
+crossed swords painted on it, and a yard full of racks and dummies would do far
+more to say *this is where soldiers come from*.
+
+---
+
+# 3. Workshop — "Thornworks"
+
+3×3, 96 × 96 px. Requires a Keep. Builds Siege Carts.
+
+> Top-down orthographic view of a fantasy siege workshop: an open-sided timber
+> workshop under a half-roof, a large wooden gear and winch assembly, stacked
+> cut lumber, a half-built catapult arm on trestles, coils of rope, iron banding.
+> Industrial, cluttered, purposeful.
+
+Current palette: timber `#5b5346`, brass gear `#b9a071`. Team colour: roof band.
+
+**What I most need:** it should look related to the Siege Cart, which came out
+well — the same rope skeins, iron brackets and planked timber would tie them
+together as one faction's engineering.
+
+---
+
+# 4. Altar of Embers — "Briar Shrine"
+
+3×3, 96 × 96 px. Summons and revives the hero. Should feel like the most
+*important* building on the field, not just another shed.
+
+> Top-down orthographic view of a fantasy shrine: a raised circular stone dais
+> reached by low steps, four carved standing stones around the rim, a wide
+> fire-bowl at the centre burning with orange flame, scorch marks on the stone,
+> carved runes. Solemn, ancient, ceremonial.
+
+Current palette: stone `#6f6554` / `#847a66`, flame `#ffb24a`. Team colour: a
+cloth or banner between the standing stones.
+
+**What I most need:** this already pulses a glow and I like it. What I want from
+the reference is the *architecture* around the flame — steps, stones, proportions
+— so the glow sits in something built rather than floating on a disc.
+
+---
+
+# 5. Guard Tower — "Spike Nest"
+
+2×2, 64 × 64 px. Static ranged defence, 7 tile range.
+
+> Top-down orthographic view of a fantasy stone watchtower seen from directly
+> above: a square crenellated parapet with merlons around the edge, a dark open
+> interior with a ladder visible, arrow slits, a small pennant on a corner pole.
+> Compact, defensive, solid masonry.
+
+Current palette: stone `#7a7060` / `#8d8373`, shadow `#3a342c`. Team colour:
+pennant and roof band.
+
+**What I most need:** from directly overhead a tower is mostly a ring of merlons
+around a hole, which is a good distinctive shape — I want to see how much of the
+interior to show, and whether a partial roof reads better than an open top.
+
+---
+
+# 6. Blacksmith — "Bonefitter"
+
+3×3, 96 × 96 px. Researches melee attack, ranged attack and armour.
+
+> Top-down orthographic view of a fantasy blacksmith's forge: a stone building
+> with a large chimney glowing orange at its mouth, an open working bay with an
+> anvil and quench barrel, a rack of finished blades, a grindstone, heaped
+> charcoal. Soot-stained, hot, busy.
+
+Current palette: stone `#4e463a` / `#5e5448`, anvil `#2f2b26`, forge glow
+`rgba(255,120,40,…)`. Team colour: roof band.
+
+**What I most need:** the forge glow is the one animated thing it has and it
+should be the hero element. I want to see how big the chimney and bay should be
+relative to the building so the glow reads from across the map.
+
+---
+
+# Bonus: the Gold Seam
+
+2×2, 64 × 64 px, neutral — not a building, but a structure-shaped thing the
+player stares at all game and it's plainer than it deserves.
+
+> Top-down orthographic view of a fantasy gold mine entrance cut into a rocky
+> outcrop: a dark timber-framed adit mouth, scattered boulders, visible veins of
+> gold ore in the exposed rock, a minecart rail stub, spoil heaps. Rugged,
+> worked, no vegetation.
+
+Current palette: rock `#6d6256` / `#3a342c`, cave mouth `#14100c`, gold
+`#f2c23a`. No team colour — mines are neutral.
+
+**What I most need:** it shows a depletion state (gold nuggets disappear as it
+empties) and holds up to five workers. A design where the ore is visibly *on* the
+rock would make depletion legible.
+
+---
+
+# If you'd rather direct in words
+
+Same three questions as the character doc, per building:
+
+1. **Silhouette.** What should I recognise it by from across the map, with no
+   colour at all?
+2. **One wrong thing.** The worst-reading detail right now.
+3. **One missing thing.** The detail that would say what this building *does*.
+
+# Suggested order
+
+The Barracks and Blacksmith are the weakest and the most looked-at, so they'd
+repay a reference first. The Farm matters because of how many are on screen. The
+Altar is the one with the most upside — it should feel significant and currently
+doesn't.
