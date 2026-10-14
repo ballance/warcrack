@@ -5616,17 +5616,124 @@ function drawBuildingShape(b, x, y) {
       break;
     }
     case 'barracks': {
-      ctx.fillRect(x0 + 3, y0 + 8, w - 6, h - 12);
-      ctx.fillStyle = f.dark;
-      ctx.fillRect(x0 + 3, y0 + 4, w - 6, 8);
-      ctx.fillStyle = '#3a3026';
-      for (let i = 0; i < 3; i++) ctx.fillRect(x0 + 8 + i * 14, y0 + 20, 8, 12);
-      ctx.strokeStyle = '#cfd4de'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x - 10, y0 + h - 10); ctx.lineTo(x + 10, y0 + h - 22); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x + 10, y0 + h - 10); ctx.lineTo(x - 10, y0 + h - 22); ctx.stroke();
-      drawFlag(x0 + w - 7, y0 + 6, f);
+      // Footprint splits into a timber-framed hall under a shingled gable and an
+      // open training yard. The team colour rides the roof ridge, which is the
+      // only part of a building you really see from straight above.
+      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
+      const shingle = flash ? '#8a6a60' : '#4a3b30';
+      const shingleLit = flash ? '#9a7a70' : '#5a4a3c';
+      const yard = '#c9a878', yardLine = '#b09060';
+      const ink = 'rgba(18,14,10,.95)';
+      const splitX = x0 + w * 0.62;
+
+      // --- training yard floor, planked ---
+      ctx.fillStyle = yard;
+      ctx.fillRect(splitX, y0 + 5, x0 + w - 5 - splitX, h - 10);
+      ctx.strokeStyle = yardLine; ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) {
+        ctx.beginPath();
+        ctx.moveTo(splitX, y0 + 5 + i * (h - 10) / 6);
+        ctx.lineTo(x0 + w - 5, y0 + 5 + i * (h - 10) / 6);
+        ctx.stroke();
+      }
+
+      // --- shingled gable roof, two slopes meeting at a central ridge ---
+      const rx0 = x0 + 5, rx1 = splitX, ridge = (rx0 + rx1) / 2;
+      ctx.fillStyle = shingleLit;
+      ctx.fillRect(rx0, y0 + 5, ridge - rx0, h - 10);
+      ctx.fillStyle = shingle;
+      ctx.fillRect(ridge, y0 + 5, rx1 - ridge, h - 10);
+      ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1;
+      for (let row = 0; row < 11; row++) {           // staggered shingle courses
+        const ry = y0 + 9 + row * (h - 14) / 11;
+        ctx.beginPath(); ctx.moveTo(rx0, ry); ctx.lineTo(rx1, ry); ctx.stroke();
+        for (let cI = 0; cI < 5; cI++) {
+          const cxp = rx0 + ((row % 2) ? 5 : 0) + cI * (rx1 - rx0) / 5;
+          if (cxp <= rx1 - 2) {
+            ctx.beginPath(); ctx.moveTo(cxp, ry); ctx.lineTo(cxp, ry + (h - 14) / 11); ctx.stroke();
+          }
+        }
+      }
+      // team-coloured ridge beam with timber cleats
+      ctx.fillStyle = f.color;
+      ctx.fillRect(ridge - 3, y0 + 4, 6, h - 8);
+      ctx.fillStyle = f.light;
+      ctx.fillRect(ridge - 3, y0 + 4, 2, h - 8);
+      ctx.fillStyle = beam;
+      for (let i = 0; i < 4; i++) ctx.fillRect(ridge - 5, y0 + 12 + i * (h - 24) / 3, 10, 6);
+      // stone chimney
+      ctx.fillStyle = '#b8b0a2';
+      ctx.fillRect(rx0 + 7, y0 + 13, 15, 15);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4;
+      ctx.strokeRect(rx0 + 7, y0 + 13, 15, 15);
+      ctx.fillStyle = '#1a1510';
+      ctx.fillRect(rx0 + 11, y0 + 17, 7, 7);
+      // doorway steps at the eave
+      ctx.fillStyle = '#9a9288';
+      ctx.fillRect(ridge - 12, y0 + h - 10, 24, 8);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+      ctx.strokeRect(ridge - 12, y0 + h - 10, 24, 8);
+
+      // --- pell: straw target on a crossbar post ---
+      const px2 = splitX + (x0 + w - 5 - splitX) / 2, py2 = y0 + 24;
+      ctx.fillStyle = beamDark;
+      ctx.fillRect(px2 - 13, py2 - 3, 26, 5);
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(px2 - 5, py2 + 2, 10, 11);
+      ctx.fillStyle = '#d9c08a';
+      ctx.beginPath(); ctx.arc(px2, py2 - 1, 8, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = '#b89a62'; ctx.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        const a2 = i * 1.05;
+        ctx.beginPath(); ctx.moveTo(px2, py2 - 1);
+        ctx.lineTo(px2 + Math.cos(a2) * 8, py2 - 1 + Math.sin(a2) * 8); ctx.stroke();
+      }
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(px2, py2 - 1, 8, 0, 6.3); ctx.stroke();
+
+      // --- weapon rack: two swords and two bows ---
+      const wx2 = px2, wy2 = y0 + h * 0.66;
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(wx2 - 16, wy2 - 14, 32, 28);
+      ctx.fillStyle = yard;
+      ctx.fillRect(wx2 - 13, wy2 - 11, 26, 22);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4;
+      ctx.strokeRect(wx2 - 16, wy2 - 14, 32, 28);
+      ctx.strokeStyle = '#e4e9f0'; ctx.lineWidth = 2.4;      // blades
+      ctx.beginPath();
+      ctx.moveTo(wx2 - 9, wy2 - 7); ctx.lineTo(wx2 - 9, wy2 + 9);
+      ctx.moveTo(wx2 - 4, wy2 - 7); ctx.lineTo(wx2 - 4, wy2 + 9);
+      ctx.stroke();
+      ctx.fillStyle = f.color;                                // pommels in team colour
+      ctx.beginPath(); ctx.arc(wx2 - 9, wy2 - 9, 2, 0, 6.3); ctx.fill();
+      ctx.beginPath(); ctx.arc(wx2 - 4, wy2 - 9, 2, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = '#a07840'; ctx.lineWidth = 2.2;       // bows
+      ctx.beginPath(); ctx.arc(wx2 + 10, wy2 + 1, 9, 2.1, 4.2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(wx2 + 16, wy2 + 1, 9, 2.1, 4.2); ctx.stroke();
+      ctx.strokeStyle = f.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(wx2 + 1, wy2 + 1); ctx.lineTo(wx2 + 9, wy2 + 1); ctx.stroke();
+
+      // --- timber frame around the whole footprint, corner blocks on top ---
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(x0 + 2, y0 + 2, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + h - 8, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + 2, 6, h - 4);
+      ctx.fillRect(x0 + w - 8, y0 + 2, 6, h - 4);
+      ctx.fillStyle = beamDark;
+      ctx.fillRect(splitX - 3, y0 + 2, 6, h - 4);
+      ctx.fillStyle = corner;
+      const blocks = [[x0 + 1, y0 + 1], [x0 + w - 11, y0 + 1], [x0 + 1, y0 + h - 11],
+                      [x0 + w - 11, y0 + h - 11], [splitX - 5, y0 + 1], [splitX - 5, y0 + h - 11],
+                      [x0 + 1, y0 + h / 2 - 5], [x0 + w - 11, y0 + h / 2 - 5]];
+      for (const bl of blocks) {
+        ctx.fillRect(bl[0], bl[1], 10, 10);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.strokeRect(bl[0], bl[1], 10, 10);
+      }
+      drawFlag(x0 + w - 6, y0 + 6, f);
       break;
     }
+
     case 'workshop': {
       ctx.fillRect(x0 + 3, y0 + 10, w - 6, h - 14);
       ctx.fillStyle = '#5b5346';

@@ -110,9 +110,25 @@ read as one blob. Pitch direction, a chimney, something asymmetric.
 
 ---
 
-# 2. Barracks — "Howling Pen"
+# 2. Barracks — "Howling Pen"  ✅ done
 
 3×3, 96 × 96 px. Trains Footmen and Archers.
+
+**References received and implemented** (two top-down, one isometric). Taken: the
+footprint split into a timber-framed hall and an open training yard; a shingled
+gable roof in staggered courses with the two slopes meeting at a central ridge;
+the **team colour riding the ridge beam** with timber cleats across it; a stone
+chimney; doorway steps at the eave; a straw pell on a crossbar post; a weapon
+rack holding two blades with team-coloured pommels and two bows; and a timber
+frame with corner blocks around the whole footprint.
+
+**Answer to the open question:** the training yard was the right instinct — it is
+now a third of the footprint and carries the identity, so the Barracks reads as
+*where soldiers come from* rather than a box with swords painted on it.
+
+**Lesson for the remaining five:** the ridge beam is the best home for team
+colour on any pitched roof. From straight above it is a long unbroken line
+through the middle of the building, which beats a band around the eaves.
 
 > Top-down orthographic view of a fantasy military barracks: a long hall with a
 > shingled gable roof, a stone chimney, an open training yard at one end with a
