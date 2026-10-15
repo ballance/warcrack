@@ -288,6 +288,7 @@ const CONFIG = {
   goldPerTrip: 10,
   lumberPerTrip: 10,
   mineSlots: 5,
+  mineSearchTiles: 22,    // how far a Laborer will look for a seam on its own
   mineTime: 2.0,          // seconds inside the mine per trip
   chopTime: 2.0,          // seconds per chop
   mineGold: 13500,
@@ -1739,13 +1740,58 @@ function nearestDropoff(u) {
   }
   return best;
 }
+/* How many of a player's Laborers are ASSIGNED to each seam.
+   m.miners only holds the ones currently down the shaft — roughly a quarter of
+   a round trip — so using its length as the capacity test meant the "five per
+   seam" limit almost never tripped, and every Laborer piled onto the single
+   nearest seam while a second one sat untouched a few tiles away. */
+const MINE_LOAD = new Map();
+function mineLoads(owner) {
+  MINE_LOAD.clear();
+  const ents = G.ents;
+  for (let i = 0; i < ents.length; i++) {
+    const e = ents[i];
+    if (e.dead || e.kind !== 'unit' || e.owner !== owner) continue;
+    const o = e.order;
+    if (o && o.t === 'gather' && o.kind === 'gold' && o.mine && !o.mine.dead) {
+      MINE_LOAD.set(o.mine.id, (MINE_LOAD.get(o.mine.id) || 0) + 1);
+    }
+  }
+  return MINE_LOAD;
+}
+
+/* Nearest seam that still has room for another worker, measured from `from`.
+   Falls back to the nearest seam of any crowding so a Laborer always has
+   somewhere to go. */
+function bestGoldMine(owner, fromX, fromY, maxTiles) {
+  const load = mineLoads(owner);
+  const lim = (maxTiles || CONFIG.mineSearchTiles) * TILE;
+  let near = null, nearD = Infinity;      // closest with room, inside the radius
+  let crowd = null, crowdD = Infinity;    // closest of any crowding, inside it
+  let far = null, farD = Infinity;        // closest anywhere, as a last resort
+  const ents = G.ents;
+  for (let i = 0; i < ents.length; i++) {
+    const e = ents[i];
+    if (e.kind !== 'mine' || e.dead || e.amount <= 0) continue;
+    const d = dist(fromX, fromY, e.x, e.y);
+    if (d < farD) { farD = d; far = e; }
+    if (d > lim) continue;
+    if (d < crowdD) { crowdD = d; crowd = e; }
+    if ((load.get(e.id) || 0) >= CONFIG.mineSlots) continue;
+    if (d < nearD) { nearD = d; near = e; }
+  }
+  // Queuing at a full seam near home beats hiking to an empty one across the
+  // map, so a crowded local seam wins over a distant free one.
+  return near || crowd || far;
+}
+
 function nearestMine(u, needFree) {
+  if (needFree) return bestGoldMine(u.owner, u.x, u.y);
   let best = null, bd = Infinity;
   const ents = G.ents;
   for (let i = 0; i < ents.length; i++) {
     const e = ents[i];
     if (e.kind !== 'mine' || e.dead || e.amount <= 0) continue;
-    if (needFree && e.miners.length >= CONFIG.mineSlots) continue;
     const d = dist2(u.x, u.y, e.x, e.y);
     if (d < bd) { bd = d; best = e; }
   }
@@ -2805,15 +2851,8 @@ function makeAI(p) {
     },
 
     bestMineFor(u) {
-      let best = null, bd = Infinity;
-      for (const e of G.ents) {
-        if (e.kind !== 'mine' || e.dead || e.amount <= 0) continue;
-        if (e.miners.length >= CONFIG.mineSlots) continue;
-        const d = dist2(e.x, e.y, this.homeX, this.homeY);
-        if (d > (34 * TILE) * (34 * TILE)) continue;
-        if (d < bd) { bd = d; best = e; }
-      }
-      return best;
+      // measured from home, not from the worker, so the crew stays near base
+      return bestGoldMine(p.id, this.homeX, this.homeY, 34);
     },
 
     /* ---- worker economy ---- */
@@ -7434,12 +7473,7 @@ function startGame(seedText, diffKey, opts) {
       const sp = freeSpotNear(hall.x + Math.cos(a) * 92, hall.y + Math.sin(a) * 92, 8);
       const u = spawnUnit('laborer', pid, sp.x, sp.y);
       // send the opening workers to the nearest seam
-      let mine = null, bd = Infinity;
-      for (const e of G.ents) {
-        if (e.kind !== 'mine') continue;
-        const d = dist2(e.x, e.y, hall.x, hall.y);
-        if (d < bd && e.miners.length < CONFIG.mineSlots) { bd = d; mine = e; }
-      }
+      const mine = bestGoldMine(pid, hall.x, hall.y);
       if (i < 4 && mine) setOrder(u, { t: 'gather', kind: 'gold', mine: mine });
       else setOrder(u, { t: 'gather', kind: 'lumber', treeIdx: -1 });
     }
