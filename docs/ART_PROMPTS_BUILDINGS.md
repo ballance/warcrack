@@ -238,23 +238,42 @@ Current palette: stone `#bcb09b` platform / `#aa9f88` mid tier / `#9a8f79`
 lower / `#564e42` risers, bowl `#6e665a` with `#33302b` iron, flame
 `rgba(226,70,22)` → `rgba(255,245,196)` core. Team colour: the banner swags.
 
-# 5. Guard Tower — "Spike Nest"
+# 5. Guard Tower — "Spike Nest"  ✅ done
 
 2×2, 64 × 64 px. Static ranged defence, 7 tile range.
 
-> Top-down orthographic view of a fantasy stone watchtower seen from directly
-> above: a square crenellated parapet with merlons around the edge, a dark open
-> interior with a ladder visible, arrow slits, a small pennant on a corner pole.
-> Compact, defensive, solid masonry.
+**Reference received and implemented.** Taken: a square crenellated parapet with
+merlons and embrasures; a battered base splaying out at the corners; a planked
+deck ring inside the parapet; a dark hatch with a ladder down it; and a flag on
+a corner pole.
 
-Current palette: stone `#7a7060` / `#8d8373`, shadow `#3a342c`. Team colour:
-pennant and roof band.
+**Answer to the open question — how much interior to show, and whether a partial
+roof beats an open top:** open top, decisively. A roof turns it into a hut. The
+hole is the thing that says there are people up there shooting at you, and the
+planked ring around it is what makes the hole read as a hatch rather than a
+hole in the building. A deck with no opening would have been a floor.
 
-**What I most need:** from directly overhead a tower is mostly a ring of merlons
-around a hole, which is a good distinctive shape — I want to see how much of the
-interior to show, and whether a partial roof reads better than an open top.
+**The one place the reference could not be followed.** It bands the whole wall
+below the parapet in team colour, which is right on a tall tower seen from the
+side. Drawn as a ring on a 64px top-down sprite it is an enormous amount of
+area — at any line weight it read as a coloured picture frame with a tower
+inside it. The colour sits on the four corner merlons instead: same idea, a
+fraction of the area, and on the building rather than around it. **General rule
+this suggests:** a feature that wraps a silhouette costs far more on a top-down
+sprite than the same feature on a side view, because from above the perimeter is
+most of what you see.
 
----
+**What the render caught:** two embrasures a side left corner merlons so wide
+the parapet read as a plain frame with blocks drawn on it. Three a side reads as
+castellation. The notches also have to be *darker* than the merlons — filled in
+a mid tone they read as more blocks rather than as gaps.
+
+Checked side by side at true size against the Farm, the other 2×2: grey
+castellation against gold thatch and a green plot, no chance of confusing them.
+
+Current palette: ashlar `#b5aa98` / `#8d8273` / `#6b6356` / `#49433a`, deck
+`#7a5c3c`, hatch `#15110c`, ladder `#8a6a3a`. Team colour: corner merlon caps
+and the flag.
 
 # 6. Blacksmith — "Bonefitter"  ✅ done
 
@@ -317,17 +336,38 @@ Same three questions as the character doc, per building:
 2. **One wrong thing.** The worst-reading detail right now.
 3. **One missing thing.** The detail that would say what this building *does*.
 
-# Suggested order
+# What is left
 
-One left: the **Guard Tower**. It is the last 2×2 and the only building whose
-whole job is to be recognised instantly at a distance — you need to know a tower
-is there before you walk an army into its range. The open question in its
-section still stands: from straight above a tower is mostly a ring of merlons
-around a hole, and what I want to know is how much of the interior to show and
-whether a partial roof reads better than an open top.
+All eight buildings are done. The only thing still on this page is the **Gold
+Seam**, which is not a building but gets stared at all game, and whose open
+question is how to make its depletion state legible.
 
-After that the only thing left on this page is the **Gold Seam**, which is not a
-building but gets stared at all game.
+# What the eight taught us
+
+Worth keeping, because these were learned one mistake at a time:
+
+1. **The team colour goes on the ridge beam.** True for the Barracks, Farm,
+   Blacksmith, Town Hall and Workshop. From straight above a ridge is a long
+   unbroken line through the middle of the building, which beats a band at the
+   eaves. Buildings with no ridge need their own answer — banner swags for the
+   Altar, corner merlon caps for the Tower.
+2. **A feature that wraps the silhouette costs far more from above** than the
+   same feature on a side view, because the perimeter is most of what you see.
+   This is why the Tower's wall band had to become four caps.
+3. **Separate the same-size buildings by layout, not detail.** The four 3×3s go
+   split-vertical (Barracks), split-horizontal (Blacksmith), diagonal
+   (Workshop) and round (Altar). At map scale that is the only difference that
+   survives.
+4. **Colour separates better than shape at 64px.** What stops a row of farms
+   blurring together is gold thatch and a green plot, not roof pitch.
+5. **Two small glows read better than one big one.** The Blacksmith's chimney
+   mouth plus coal bed read as a structure with fire in it; a single large glow
+   is an orange smear.
+6. **Size the fire to the vessel, not the building.** The Altar's bowl is a
+   sixth of the footprint and still dominates, because it is the only bright
+   thing among a lot of grey.
+7. **Shared palettes do the faction work.** The Workshop reads as kin to the
+   Siege Cart because it uses that unit's exact timber, rope and steel values.
 
 # How these get reviewed now
 
