@@ -163,22 +163,42 @@ more to say *this is where soldiers come from*.
 
 ---
 
-# 3. Workshop — "Thornworks"
+# 3. Workshop — "Thornworks"  ✅ done
 
 3×3, 96 × 96 px. Requires a Keep. Builds Siege Carts.
 
-> Top-down orthographic view of a fantasy siege workshop: an open-sided timber
-> workshop under a half-roof, a large wooden gear and winch assembly, stacked
-> cut lumber, a half-built catapult arm on trestles, coils of rope, iron banding.
-> Industrial, cluttered, purposeful.
+**Reference received and implemented.** Taken: a half-roof over one corner on
+braced posts with the team colour on the ridge; a half-built throwing arm lying
+on trestles with a rope skein wound round it, steel bands and a copper sling cup
+at the tip; a rope-wound winch drum with a brass gear and crank; a coil of rope;
+a stack of cut lumber shown plank-ends-on; and stone footings at the base.
 
-Current palette: timber `#5b5346`, brass gear `#b9a071`. Team colour: roof band.
+**Answer to the open question — tying it to the Siege Cart:** the palette is
+lifted off `drawUnit`'s siege case line for line. Same `#b8894a` timber, same
+`#d9c08a` rope over `#b89a62`, same `#5c5c5c` steel. The winch drum is the same
+part drawn the same way on both. That did more to make them look like one
+faction's engineering than any amount of matched silhouette would have.
 
-**What I most need:** it should look related to the Siege Cart, which came out
-well — the same rope skeins, iron brackets and planked timber would tie them
-together as one faction's engineering.
+**The diagonal is what makes it this building and nothing else.** Every other
+building on the map is squares aligned to the grid, so one long beam cutting
+corner to corner is unmistakable even at a glance. It also solved the
+3×3-sameness problem differently from the Blacksmith: that one turned its split
+ninety degrees, this one ignores the axes entirely.
 
----
+**What the render caught:** the beam originally ran the full diagonal and lay
+straight on top of the rope coil. Pulling both ends in and shrinking the coil
+into the freed corner fixed it — but the real lesson is that the arm claims the
+whole middle of the footprint, so the yard props only have the triangle below it
+to live in. That triangle holds three things comfortably and no more.
+
+Two deliberate departures, both for separation from the Barracks, which is the
+other timber building with a shingled roof: **iron cleats** on the ridge instead
+of timber ones, and **stone footings** instead of tan timber corner blocks.
+
+Current palette: timber `#b8894a` / `#9a7038` / `#6b4e28` / `#4e3a22`, shingle
+`#44372c` / `#5c4b3a`, rope `#d9c08a` / `#b89a62`, steel `#5c5c5c`, brass
+`#c9a44e` / `#e3c070`, copper cup `#8a4a2c` / `#b06a42`, stone `#9a9186`.
+Team colour: ridge beam.
 
 # 4. Altar of Embers — "Briar Shrine"  ✅ done
 
@@ -299,10 +319,15 @@ Same three questions as the character doc, per building:
 
 # Suggested order
 
-Two left: **Workshop** and **Guard Tower**. The Workshop should tie to the Siege
-Cart, which came out well — same rope skeins, iron brackets and planked timber.
-The Guard Tower is the last 2×2 and the only one whose whole job is to be
-recognised instantly at a distance.
+One left: the **Guard Tower**. It is the last 2×2 and the only building whose
+whole job is to be recognised instantly at a distance — you need to know a tower
+is there before you walk an army into its range. The open question in its
+section still stands: from straight above a tower is mostly a ring of merlons
+around a hole, and what I want to know is how much of the interior to show and
+whether a partial roof reads better than an open top.
+
+After that the only thing left on this page is the **Gold Seam**, which is not a
+building but gets stared at all game.
 
 # How these get reviewed now
 

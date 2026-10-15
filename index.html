@@ -340,7 +340,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · embers';
+const BUILD = '2026-10-15 · thornworks';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -5997,23 +5997,202 @@ function drawBuildingShape(b, x, y) {
     }
 
     case 'workshop': {
-      ctx.fillRect(x0 + 3, y0 + 10, w - 6, h - 14);
-      ctx.fillStyle = '#5b5346';
-      ctx.fillRect(x0 + 3, y0 + 6, w - 6, 8);
-      // gear
-      ctx.strokeStyle = '#b9a071'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(x, y + 2, 11, 0, 6.3); ctx.stroke();
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 6; i++) {
-        const a = i * 1.047 + b.anim * 0.6;
+      // A half-roof over one corner and an open yard wrapping around it, with a
+      // half-built throwing arm lying on trestles across the open ground. The
+      // diagonal is the point: every other building on the map is made of
+      // squares aligned to the grid, so one long beam cutting across at an angle
+      // is instantly this building and nothing else.
+      //
+      // Palette and parts are lifted straight off the Siege Cart it builds --
+      // the same rope skeins, steel brackets, rope-wound winch drum and planked
+      // timber -- so the two read as one faction's engineering rather than two
+      // unrelated props.
+      const wLite = flash ? '#ffd9d0' : '#b8894a', wMid = flash ? '#ffc9bc' : '#9a7038';
+      const wDark = '#6b4e28', wDeep = '#4e3a22';
+      const steel = '#8a8a8a', steelLite = '#a8a8a8', steelDark = '#5c5c5c';
+      const rope = '#d9c08a', ropeDark = '#b89a62';
+      const brass = '#c9a44e', brassLite = '#e3c070';
+      const shingle = flash ? '#7a5e52' : '#44372c';
+      const shingleLit = flash ? '#8c6e60' : '#5c4b3a';
+      const stone = '#9a9186', stoneDark = '#6e675c';
+      const ink = 'rgba(20,16,12,.9)';
+      const bx0 = x0 + 4, by0 = y0 + 4, bx1 = x0 + w - 4, by1 = y0 + h - 4;
+      const rx1 = x0 + w * 0.54, ry1 = y0 + h * 0.5;      // the roofed corner
+
+      // --- planked deck across the whole footprint ---
+      ctx.fillStyle = wMid;
+      ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+      ctx.strokeStyle = wDark; ctx.lineWidth = 1;
+      for (let i = 1; i < 9; i++) {
+        const py2 = by0 + i * (by1 - by0) / 9;
+        ctx.beginPath(); ctx.moveTo(bx0, py2); ctx.lineTo(bx1, py2); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,.12)';                  // yard reads a shade lower
+      ctx.fillRect(rx1, by0, bx1 - rx1, by1 - by0);
+      ctx.fillRect(bx0, ry1, rx1 - bx0, by1 - ry1);
+
+      // --- the half-roof: shingles over the back corner ---
+      const ridgeY = (by0 + ry1) / 2;
+      ctx.fillStyle = shingleLit;
+      ctx.fillRect(bx0, by0, rx1 - bx0, ridgeY - by0);
+      ctx.fillStyle = shingle;
+      ctx.fillRect(bx0, ridgeY, rx1 - bx0, ry1 - ridgeY);
+      ctx.strokeStyle = 'rgba(0,0,0,.38)'; ctx.lineWidth = 1;
+      for (let row = 0; row < 5; row++) {
+        const ry = by0 + 3 + row * (ry1 - by0 - 3) / 5;
+        ctx.beginPath(); ctx.moveTo(bx0, ry); ctx.lineTo(rx1, ry); ctx.stroke();
+        for (let cI = 0; cI < 5; cI++) {
+          const cxp = bx0 + ((row % 2) ? 5 : 0) + cI * (rx1 - bx0) / 5;
+          if (cxp <= rx1 - 2) {
+            ctx.beginPath(); ctx.moveTo(cxp, ry); ctx.lineTo(cxp, ry + (ry1 - by0 - 3) / 5); ctx.stroke();
+          }
+        }
+      }
+      // team-coloured ridge beam. Iron cleats here rather than the timber ones
+      // the Barracks and Farm use -- this is the shed that works in metal.
+      ctx.fillStyle = f.color;
+      ctx.fillRect(bx0 - 1, ridgeY - 3, rx1 - bx0 + 2, 6);
+      ctx.fillStyle = f.light;
+      ctx.fillRect(bx0 - 1, ridgeY - 3, rx1 - bx0 + 2, 2);
+      ctx.fillStyle = steelDark;
+      for (let i = 0; i < 3; i++) ctx.fillRect(bx0 + 5 + i * (rx1 - bx0 - 16) / 2, ridgeY - 5, 7, 10);
+      // posts holding the open edges up, with steel plates
+      for (const pp of [[rx1 - 7, by0 + 2], [rx1 - 7, ry1 - 9], [bx0 + 2, ry1 - 9]]) {
+        ctx.fillStyle = wDark;
+        ctx.fillRect(pp[0], pp[1], 7, 7);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.strokeRect(pp[0], pp[1], 7, 7);
+        ctx.fillStyle = steelDark;
+        ctx.fillRect(pp[0] + 1, pp[1] + 2.5, 5, 2);
+      }
+
+      // --- the throwing arm on its trestles, corner to corner ---
+      const ax = x0 + w * 0.22, ay = y0 + h * 0.76;
+      const bx2 = x0 + w * 0.88, by2 = y0 + h * 0.18;
+      const dx = bx2 - ax, dy = by2 - ay, AL = Math.hypot(dx, dy);
+      const ux = dx / AL, uy = dy / AL, nx = -uy, ny = ux;
+      const P = (t, o) => [ax + ux * AL * t + nx * o, ay + uy * AL * t + ny * o];
+      const quad = (pts, fill, lw) => {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        ctx.closePath(); ctx.fill();
+        if (lw) { ctx.strokeStyle = ink; ctx.lineWidth = lw; ctx.stroke(); }
+      };
+      // trestles under it first, so the beam lies on top
+      for (const t of [0.28, 0.62]) {
+        quad([P(t, -12), P(t, 12), P(t + 0.07, 10), P(t + 0.07, -10)], wDeep, 1.6);
+        ctx.strokeStyle = wMid; ctx.lineWidth = 1.6;
+        const c1 = P(t + 0.027, -10), c2 = P(t + 0.027, 10);
+        ctx.beginPath(); ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c2[0], c2[1]); ctx.stroke();
+      }
+      quad([P(0, -5.5), P(0, 5.5), P(0.88, 4), P(0.88, -4)], wLite, 1.5);   // the beam
+      ctx.fillStyle = 'rgba(0,0,0,.2)';                                      // its shaded half
+      quad([P(0, 1), P(0, 5.5), P(0.88, 4), P(0.88, 1)], 'rgba(0,0,0,.2)', 0);
+      ctx.strokeStyle = rope; ctx.lineWidth = 1.6;        // rope skein wound round it
+      for (let i = 0; i < 9; i++) {
+        const t = 0.36 + i * 0.019;
+        const s1 = P(t, -5.2), s2 = P(t, 5.2);
+        ctx.beginPath(); ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.stroke();
+      }
+      ctx.strokeStyle = ropeDark; ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const t = 0.37 + i * 0.043;
+        const s1 = P(t, -5.2), s2 = P(t, 5.2);
+        ctx.beginPath(); ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.stroke();
+      }
+      for (const t of [0.14, 0.7]) {                      // steel bands
+        quad([P(t, -5.6), P(t, 5.6), P(t + 0.035, 4.8), P(t + 0.035, -4.8)], steelDark, 1.1);
+      }
+      // the copper sling cup at the far end
+      const cup = P(0.96, 0);
+      ctx.fillStyle = '#8a4a2c';
+      ctx.beginPath(); ctx.ellipse(cup[0], cup[1], 8.5, 7, Math.atan2(uy, ux), 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#b06a42';
+      ctx.beginPath(); ctx.ellipse(cup[0], cup[1], 6, 4.6, Math.atan2(uy, ux), 0, 6.3); ctx.fill();
+      ctx.fillStyle = steelDark;                          // the socket it seats in
+      const sk = P(0.9, 0);
+      ctx.beginPath(); ctx.arc(sk[0], sk[1], 3.2, 0, 6.3); ctx.fill();
+
+      // --- winch drum with its brass gear, bottom right ---
+      const wcx = x0 + w * 0.64, wcy = y0 + h * 0.79;
+      ctx.fillStyle = wDeep;                              // the frame it sits in
+      ctx.fillRect(wcx - 18, wcy - 10, 7, 20);
+      ctx.fillRect(wcx + 6, wcy - 10, 7, 20);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+      ctx.strokeRect(wcx - 18, wcy - 10, 7, 20);
+      ctx.strokeRect(wcx + 6, wcy - 10, 7, 20);
+      ctx.fillStyle = rope;                               // the rope-wound drum
+      ctx.fillRect(wcx - 12, wcy - 8, 19, 16);
+      ctx.strokeStyle = ropeDark; ctx.lineWidth = 1;
+      for (let i = 0; i < 7; i++) {
         ctx.beginPath();
-        ctx.moveTo(x + Math.cos(a) * 11, y + 2 + Math.sin(a) * 11);
-        ctx.lineTo(x + Math.cos(a) * 16, y + 2 + Math.sin(a) * 16);
+        ctx.moveTo(wcx - 12 + i * 2.8, wcy - 8); ctx.lineTo(wcx - 12 + i * 2.8, wcy + 8);
         ctx.stroke();
       }
-      ctx.fillStyle = f.color; ctx.fillRect(x0 + 3, y0 + 6, w - 6, 3);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(wcx - 12, wcy - 8, 19, 16);
+      ctx.fillStyle = steelDark;                          // end caps
+      ctx.fillRect(wcx - 13, wcy - 9, 3, 18);
+      ctx.fillRect(wcx + 5, wcy - 9, 3, 18);
+      const gx = wcx + 14, gy = wcy;                      // the brass gear
+      ctx.fillStyle = brass;
+      ctx.beginPath(); ctx.arc(gx, gy, 8, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.fillStyle = brassLite;
+      for (let i = 0; i < 8; i++) {
+        const a = i * 0.785 + b.anim * 0.25;
+        ctx.fillRect(gx + Math.cos(a) * 8.5 - 1.6, gy + Math.sin(a) * 8.5 - 1.6, 3.2, 3.2);
+      }
+      ctx.fillStyle = steelDark;
+      ctx.beginPath(); ctx.arc(gx, gy, 2.6, 0, 6.3); ctx.fill();
+
+      // --- coiled rope and a stack of cut lumber, the yard's raw materials ---
+      const rcx = x0 + w * 0.14, rcy = y0 + h * 0.85;
+      for (const rr of [6, 4.3, 2.6]) {
+        ctx.strokeStyle = (rr === 4.3) ? ropeDark : rope; ctx.lineWidth = 1.9;
+        ctx.beginPath(); ctx.arc(rcx, rcy, rr, 0, 6.3); ctx.stroke();
+      }
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.arc(rcx, rcy, 7, 0, 6.3); ctx.stroke();
+      const lsx = x0 + w * 0.78, lsy = y0 + h * 0.55;     // plank ends toward the viewer
+      ctx.fillStyle = wDark;
+      ctx.fillRect(lsx - 11, lsy - 9, 22, 19);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(lsx - 11, lsy - 9, 22, 19);
+      ctx.fillStyle = wLite;
+      for (let r2 = 0; r2 < 2; r2++) {
+        for (let c2 = 0; c2 < 3; c2++) {
+          ctx.beginPath();
+          ctx.arc(lsx - 6 + c2 * 6, lsy - 4 + r2 * 9, 3.1, 0, 6.3);
+          ctx.fill();
+          ctx.strokeStyle = wDeep; ctx.lineWidth = 1; ctx.stroke();
+        }
+      }
+
+      // --- timber frame, with stone footings instead of the usual timber blocks ---
+      ctx.fillStyle = wDark;
+      ctx.fillRect(x0 + 2, y0 + 2, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + h - 8, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + 2, 6, h - 4);
+      ctx.fillRect(x0 + w - 8, y0 + 2, 6, h - 4);
+      ctx.fillStyle = stone;
+      const blocks = [[x0 + 1, y0 + 1], [x0 + w - 11, y0 + 1], [x0 + 1, y0 + h - 11],
+                      [x0 + w - 11, y0 + h - 11], [x0 + w / 2 - 5, y0 + h - 11],
+                      [x0 + 1, y0 + h / 2 - 5], [x0 + w - 11, y0 + h / 2 - 5]];
+      for (const bl of blocks) {
+        ctx.fillRect(bl[0], bl[1], 10, 10);
+        ctx.fillStyle = stoneDark;
+        ctx.fillRect(bl[0], bl[1] + 7, 10, 3);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.strokeRect(bl[0], bl[1], 10, 10);
+        ctx.fillStyle = stone;
+      }
+      drawFlag(rx1 - 6, by0 + 6, f);
       break;
     }
+
     case 'altar': {
       // The only round building on the map, and that is most of why it reads as
       // the important one: everything else is a square under a pitched roof.
