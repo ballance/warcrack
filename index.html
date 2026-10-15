@@ -332,7 +332,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-14 · cheats';
+const BUILD = '2026-10-14 · auto-target';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -1480,6 +1480,30 @@ function navigate(u, tx, ty, arrive) {
   return false;
 }
 
+/* A flat acquire radius meant a Siege Cart (7 tile weapon) ignored anything past
+   6.2 tiles — it refused to notice what it could already shoot. Acquisition is
+   now at least the unit's own reach plus a step, capped by what it can see. */
+function acquireRangeOf(u) {
+  const weapon = u.def.range || 0;
+  return Math.min(u.def.sight, Math.max(CONFIG.acquireRange, weapon + 1.2));
+}
+
+/* Fire at anything already inside actual weapon range without touching the
+   current order. This is what lets a unit under a move order shoot a target it
+   walks past, while still going where it was told. */
+function opportunityFire(u) {
+  if (u.atkCd > 0 || u.def.worker || !u.def.dmg) return false;
+  if (u.target && validTarget(u, u.target) && tryAttack(u, u.target)) return true;
+  const t = acquireTarget(u, (attackRangeOf(u) / TILE) + 0.4);
+  if (!t) return false;
+  const rng = attackRangeOf(u) + (t.kind === 'building' ? 11 : t.radius * 0.7) + u.radius * 0.4;
+  if (distTo(u, t) > rng) return false;
+  u.target = t;
+  faceTo(u, t);
+  performAttack(u, t);
+  return true;
+}
+
 function acquireTarget(u, rangeTiles) {
   if (u.creep && u.sleeping) return null;
   const r = rangeTiles * TILE;
@@ -1544,11 +1568,12 @@ function tickUnitCombatIdle(u) {
     }
     return;
   }
-  const t = acquireTarget(u, u.hold ? u.def.range + 0.6 : CONFIG.acquireRange);
-  if (t) {
-    if (u.hold) { u.target = t; tryAttack(u, t); }
-    else { u.target = t; setOrder(u, { t: 'attack', target: t, auto: true, hx: u.x, hy: u.y }); }
-  }
+  const t = acquireTarget(u, acquireRangeOf(u));
+  if (!t) return;
+  u.target = t;
+  // Holding means hold ground: engage whatever comes inside reach, never chase.
+  if (u.hold) tryAttack(u, t);
+  else setOrder(u, { t: 'attack', target: t, auto: true, hx: u.x, hy: u.y });
 }
 
 function tickUnit(u) {
@@ -1599,6 +1624,7 @@ function tickUnit(u) {
   switch (o.t) {
     case 'move': {
       u.state = 'move';
+      opportunityFire(u);
       if (navigate(u, o.x, o.y, Math.max(9, u.radius * 0.9))) {
         finishOrder(u);
         if (u.def.worker && u.carry > 0) { /* resume gather after move */ }
@@ -1644,6 +1670,7 @@ function tickUnit(u) {
       u.state = 'move';
       const t = o.target;
       if (!t || t.dead) { finishOrder(u); break; }
+      opportunityFire(u);
       const dd = dist(u.x, u.y, t.x, t.y);
       if (dd > 60) navigate(u, t.x, t.y, 48);
       else { u.path = null; settle(u); if (!u.target) tickUnitCombatIdle(u); }
