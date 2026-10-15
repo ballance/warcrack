@@ -61,14 +61,23 @@ canvas{display:block}
 #cardTitle{font-size:10px;color:#c8b98c;height:12px;text-align:center}
 #card{display:grid;grid-template-columns:repeat(4,58px);grid-template-rows:repeat(3,42px);gap:3px}
 .cmd{border:1px solid #5a4a33;background:linear-gradient(#3b3226,#231c15);border-radius:3px;position:relative;
-  cursor:pointer;overflow:hidden;font-size:10px;color:#eadfbf;display:flex;align-items:center;justify-content:center;
-  text-align:center;line-height:1.05;padding:2px 2px 8px}
+  cursor:pointer;overflow:hidden;font-size:10px;color:#eadfbf;display:flex;flex-direction:column;
+  justify-content:flex-start;text-align:center;line-height:1.05;padding:2px 2px 8px}
 .cmd.empty{background:#15120f;border-color:#2c2520;cursor:default}
 .cmd:not(.empty):hover{border-color:#f0d27a;background:linear-gradient(#564630,#2d2419)}
 .cmd.on{border-color:#7ef08a;box-shadow:0 0 6px rgba(120,240,140,.4) inset}
 .cmd.no{opacity:.45;filter:saturate(.3)}
 .cmd .hk{position:absolute;right:2px;bottom:1px;font-size:9px;color:#f3d788}
-.cmd .ic{position:absolute;left:3px;top:2px;font-size:11px}
+/* The icon used to sit absolutely in the top-left corner, over a label box that
+   spanned the whole button. One-word labels cleared it by luck; anything that
+   wrapped ran under it ("Upgrade to Keep" printed straight through the glyph).
+   At 42px tall there is no padding that clears an 11px corner badge and still
+   leaves room for two lines, so the icon gets its own row and the label takes
+   what is left. Long labels step down a size rather than overflow. */
+.cmd .ic{flex:0 0 auto;height:11px;line-height:11px;font-size:11px;text-align:left;
+  padding-left:1px;overflow:hidden}
+.cmd .lb{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cmd .lb.lng{font-size:8.5px;line-height:1}
 .cmd .cdov{position:absolute;left:0;bottom:0;width:100%;background:rgba(0,0,0,.62);pointer-events:none}
 .cmd .cdn{position:absolute;left:0;top:50%;transform:translateY(-50%);width:100%;text-align:center;
   font-size:14px;color:#fff;text-shadow:0 0 3px #000}
@@ -140,6 +149,9 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   #minimap{width:128px;height:128px}
   #cardWrap{flex:0 0 224px}
   #card{grid-template-columns:repeat(4,52px);grid-template-rows:repeat(3,38px)}
+  .cmd{font-size:9px;padding:1px 2px 7px}
+  .cmd .ic{height:10px;line-height:10px;font-size:10px}
+  .cmd .lb.lng{font-size:8px}
   #portWrap{flex:0 0 72px}
   #portrait{width:64px;height:64px}
 }
@@ -151,6 +163,9 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   #info{font-size:11px}
   #cardWrap{flex:0 0 212px;padding:3px}
   #card{grid-template-columns:repeat(4,49px);grid-template-rows:repeat(3,36px)}
+  .cmd{font-size:9px;padding:1px 2px 6px}
+  .cmd .ic{height:9px;line-height:9px;font-size:9px}
+  .cmd .lb.lng{font-size:7.5px}
   #topbar{font-size:12px;padding:0 5px}
   #topbar .res{margin-right:10px}
   #daynight{margin-right:8px}
@@ -180,7 +195,7 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   <div id="msgs"></div>
   <div id="spectate"></div>
 
-  <div id="cheatBar"><label for="cheatIn">cheat</label><input type="text" id="cheatIn" autocomplete="off" spellcheck="false"></div>
+  <div id="cheatBar"><label for="cheatIn">command</label><input type="text" id="cheatIn" autocomplete="off" spellcheck="false"></div>
 
   <div id="hud">
     <div id="mmwrap" class="panel"><canvas id="minimap" width="96" height="96"></canvas></div>
@@ -340,7 +355,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · watchfires';
+const BUILD = '2026-10-15 · cardfit';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -7700,7 +7715,10 @@ function renderCard() {
     if (c.hk) cardKeys.add(c.hk.toUpperCase());
     const cls = 'cmd' + (c.dis ? ' no' : '') + (c.on ? ' on' : '');
     html += '<div class="' + cls + '" data-i="' + i + '">' +
-      '<span class="ic">' + (c.icon || '') + '</span>' + c.label +
+      '<span class="ic">' + (c.icon || '') + '</span>' +
+      // 9 characters is about what fits on one line at the default size; past
+      // that the label wraps, and two lines only fit at the smaller size.
+      '<span class="lb' + ((c.label || '').length > 9 ? ' lng' : '') + '">' + c.label + '</span>' +
       (c.hk ? '<span class="hk">' + c.hk + '</span>' : '');
     if (c.cd > 0 && c.cdmax > 0) {
       html += '<div class="cdov" style="height:' + Math.round(100 * c.cd / c.cdmax) + '%"></div>' +
