@@ -174,12 +174,11 @@ line('  upgrades bought ' + mean(allSides.map(s => s.upgrades)).toFixed(1) + ' o
 line('\n-- Findings --');
 const notes = [];
 if (total >= 8 && (pct < 50 - 1.96 * Math.sqrt(0.25 / total) * 100 || pct > 50 + 1.96 * Math.sqrt(0.25 / total) * 100))
-  notes.push('Player 1 wins far more than chance allows. ALREADY RULED OUT, do not re-test: ' +
-    'terrain symmetry (0 mismatched tiles over 8 seeds), map position (--swap moves both players ' +
-    'and the bias stays with the player index), AI tick order (alternating changes nothing), ' +
-    'entity creation order, unit egress direction, and the fog build rule. Whatever it is, it ' +
-    'follows the player index rather than the start, so look for remaining index-dependent state: ' +
-    'the shared G.rnd draw order between the two AIs is the most likely place left.');
+  notes.push('One side is winning more than chance allows. A ~30/70 split was traced once before ' +
+    'to nearestPassable returning the first tile of its ring scan rather than the closest, which ' +
+    'drifted every spawn, revive and A* goal-snap north-west. Check placement helpers for a fixed ' +
+    'compass direction first; ruled out previously were terrain symmetry, map position (--swap), ' +
+    'AI tick order, entity creation order and the fog build rule.');
 if (unresolved / games.length > 0.15)
   notes.push(Math.round(unresolved / games.length * 100) + '% of games never resolve. Either sieges stall against towers, or neither AI can finish a crippled opponent.');
 for (const t of UNIT_TYPES) {

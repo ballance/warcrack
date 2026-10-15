@@ -798,15 +798,25 @@ function heapPop() {
 const DIRX = [1, -1, 0, 0, 1, 1, -1, -1], DIRY = [0, 0, 1, -1, 1, -1, 1, -1];
 const DIRC = [1, 1, 1, 1, 1.41421356, 1.41421356, 1.41421356, 1.41421356];
 
+/* Nearest passable tile to (tx,ty). The ring scan used to return the first hit,
+   and since it walks dy then dx from -r upward that was always the top-left
+   corner of the ring — a tile 41% farther away than the ring's top-centre one it
+   skipped. Everything that falls back to this drifted north-west: unit spawns,
+   hero revives, creep camps, A* start/goal snapping. It now keeps the closest
+   candidate in the ring instead of the first. */
 function nearestPassable(tx, ty, maxR) {
   if (passable(tx, ty)) return ti(tx, ty);
   for (let r = 1; r <= maxR; r++) {
+    let best = -1, bestD = Infinity;
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        if (passable(tx + dx, ty + dy)) return ti(tx + dx, ty + dy);
+        if (!passable(tx + dx, ty + dy)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = ti(tx + dx, ty + dy); }
       }
     }
+    if (best >= 0) return best;
   }
   return -1;
 }
@@ -1105,10 +1115,8 @@ function spawnBuilding(type, owner, tx, ty, instant) {
   // meant the bottom-left base sent every new unit toward the map edge while
   // the top-right base sent its units toward the enemy — a few tiles per unit,
   // every unit, all game. Self-play measured it as a 34/66 win split.
-  const egress = Math.atan2(WORLD * 0.5 - b.y, WORLD * 0.5 - b.x);
-  const reach = Math.max(d.tw, d.th) * TILE * 0.5;
-  b.rallyX = b.x + Math.cos(egress) * (reach + 34);
-  b.rallyY = b.y + Math.sin(egress) * (reach + 34);
+  const eg0 = egressPoint(b, 34);
+  b.rallyX = eg0.x; b.rallyY = eg0.y;
   occupy(tx, ty, d.tw, d.th, 1);
   Grid.dirtyMini = true;
   G.ents.push(b); G.byId.set(b.id, b);
@@ -2398,9 +2406,9 @@ function spawnFromBuilding(b, type) {
   const d = UNITS[type];
   const p = G.players[b.owner];
   // find a free tile on the building's skirt, on the side facing the map centre
-  const eg = Math.atan2(WORLD * 0.5 - b.y, WORLD * 0.5 - b.x);
-  const out = Math.max(b.tw, b.th) * TILE * 0.5 + 12;
-  let sx = b.x + Math.cos(eg) * out, sy = b.y + Math.sin(eg) * out;
+  const door = egressPoint(b, 12);
+  const eg = door.a;
+  let sx = door.x, sy = door.y;
   const n = nearestPassable(w2t(sx), w2t(sy), 7);
   if (n >= 0) { sx = t2w(n % M); sy = t2w((n / M) | 0); }
   const u = spawnUnit(type, b.owner, sx, sy);
@@ -2470,7 +2478,8 @@ function startRevive(b) {
   if (p.hero || b.reviveTotal > 0) return false;
   if (!p.heroSave) {
     // first summon is free
-    const sp = freeSpotNear(b.x, b.y + b.th * TILE * 0.5 + 16, 7);
+    const eg = egressPoint(b, 16);
+    const sp = freeSpotNear(eg.x, eg.y, 7);
     createHero(p, sp.x, sp.y);
     return true;
   }
@@ -2481,6 +2490,16 @@ function startRevive(b) {
   if (b.owner === 0) sfx('ack');
   return true;
 }
+/* Where things appear relative to a building: the side facing the middle of the
+   map, never a fixed compass direction. Hardcoding south sent everything from
+   the bottom-left base toward the map edge, and that mistake has now been made
+   three times in separate places — so there is one definition of it. */
+function egressPoint(b, pad) {
+  const a = Math.atan2(WORLD * 0.5 - b.y, WORLD * 0.5 - b.x);
+  const out = Math.max(b.tw, b.th) * TILE * 0.5 + (pad === undefined ? 12 : pad);
+  return { x: b.x + Math.cos(a) * out, y: b.y + Math.sin(a) * out, a: a };
+}
+
 function freeSpotNear(x, y, r) {
   const n = nearestPassable(clamp(w2t(x), 0, M - 1), clamp(w2t(y), 0, M - 1), r || 8);
   if (n < 0) return { x: x, y: y };
@@ -2558,7 +2577,8 @@ function tickBuilding(b) {
     if (b.reviveT >= b.reviveTotal) {
       b.reviveT = 0; b.reviveTotal = 0;
       const p = G.players[b.owner];
-      const sp = freeSpotNear(b.x, b.y + b.th * TILE * 0.5 + 16, 7);
+      const eg = egressPoint(b, 16);
+      const sp = freeSpotNear(eg.x, eg.y, 7);
       createHero(p, sp.x, sp.y);
     }
   }
