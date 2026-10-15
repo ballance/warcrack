@@ -2415,7 +2415,17 @@ function spawnFromBuilding(b, type) {
     if (m) setOrder(u, { t: 'gather', kind: 'gold', mine: m });
     else setOrder(u, { t: 'gather', kind: 'lumber', treeIdx: -1 });
   } else {
-    setOrder(u, { t: 'move', x: sx + (Math.random() - 0.5) * 40, y: sy + 26 + Math.random() * 20 });
+    // Step clear of the door along the same egress heading, with a little
+    // sideways scatter so a batch does not stack. This used to be a flat
+    // "+26 south", which walked every new unit from the bottom-left base back
+    // toward the map edge even though it had just spawned facing the centre.
+    const fwd = 26 + Math.random() * 20;
+    const lat = (Math.random() - 0.5) * 40;
+    setOrder(u, {
+      t: 'move',
+      x: sx + Math.cos(eg) * fwd - Math.sin(eg) * lat,
+      y: sy + Math.sin(eg) * fwd + Math.cos(eg) * lat
+    });
   }
   if (b.owner === 0) { sfx('ready'); addMsg(unitDisplayName(u) + ' ready.'); }
   if (G.ais && G.ais[b.owner]) G.ais[b.owner].onUnitReady(u);
