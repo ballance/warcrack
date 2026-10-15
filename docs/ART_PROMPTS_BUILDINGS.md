@@ -104,21 +104,30 @@ progression, this is the pattern — change the building's nature, not its size.
 
 ---
 
-# 1. Farm — "Bramble Warren"
+# 1. Farm — "Bramble Warren"  ✅ done
 
-2×2, 64 × 64 px. Grants +6 food. The most numerous building on any map — you
-will see eight of these at once, so it has to stay quiet and not fight the eye.
+2×2, 64 × 64 px. Grants +6 food.
 
-> Top-down orthographic view of a small fantasy farmstead: a thatched longhouse
-> with a steep pitched roof, a fenced pen alongside holding a vegetable plot in
-> tidy rows, a haystack, a water trough. Humble, rural, weathered timber.
+**Reference received and implemented.** Taken: a steep thatched longhouse with
+the **team colour on the ridge beam** again (third building running — it is now
+the house rule); golden straw combed down the slope with bound courses across
+it and a ragged eave fringe; a stone chimney at one end; and alongside it a
+fenced plot of tilled soil in rows with cabbages, a domed haystack on its pole,
+and a water trough.
 
-Current palette: roof `#8a6a3a`, thatch `#c3a85f`. Team colour: roof ridge band.
+**Answer to the open question — how to stop a cluster of farms reading as one
+blob:** colour, not shape. Gold thatch and a green crop plot are two colours
+nothing else on the map uses, and three farms side by side now separate
+cleanly. Pitch direction and chimney placement barely registered at 64px by
+comparison.
 
-**What I most need:** a roof shape distinct enough that a cluster of farms doesn't
-read as one blob. Pitch direction, a chimney, something asymmetric.
+**Two things the render caught that the code did not.** Combed straw at full
+strength reads as plank siding, which is the one thing a thatched roof must not
+look like — it had to drop to about a sixth of the contrast. And radial straw on
+the haystack turned it into a cartwheel; the straw now only shows at the skirt.
 
----
+Current palette: thatch `#b08e49` shadow slope / `#ddc07c` lit slope, straw
+`#c9a44e`, soil `#6b4f33`, leaf `#4f9838`. Team colour: ridge beam.
 
 # 2. Barracks — "Howling Pen"  ✅ done
 
@@ -208,23 +217,38 @@ interior to show, and whether a partial roof reads better than an open top.
 
 ---
 
-# 6. Blacksmith — "Bonefitter"
+# 6. Blacksmith — "Bonefitter"  ✅ done
 
 3×3, 96 × 96 px. Researches melee attack, ranged attack and armour.
 
-> Top-down orthographic view of a fantasy blacksmith's forge: a stone building
-> with a large chimney glowing orange at its mouth, an open working bay with an
-> anvil and quench barrel, a rack of finished blades, a grindstone, heaped
-> charcoal. Soot-stained, hot, busy.
+**Reference received and implemented.** Taken: the footprint split into a
+timber-framed hall and an open working bay; a shingled gable with the team
+colour on the ridge beam and timber cleats across it; a tall stone chimney
+standing *in the dividing wall* with its mouth glowing; a stone forge hearth
+with a burning coal bed; an anvil on its stump; a quench barrel; a grindstone on
+a trestle; a rack of finished blades; and a charcoal crib.
 
-Current palette: stone `#4e463a` / `#5e5448`, anvil `#2f2b26`, forge glow
-`rgba(255,120,40,…)`. Team colour: roof band.
+**Answer to the open question — how big the chimney and bay should be for the
+glow to read from across the map:** the bay is a little over half the footprint
+and the chimney is a quarter of the width. Two separate glowing elements, the
+chimney mouth above and the coal bed below, read far better than one large one,
+because at 96px a single glow is just an orange smear while two reads as a
+structure with fire inside it.
 
-**What I most need:** the forge glow is the one animated thing it has and it
-should be the hero element. I want to see how big the chimney and bay should be
-relative to the building so the glow reads from across the map.
+**The split runs across the footprint, not down it.** That was not in the
+reference — it came out of rendering the thing. Split vertically, the Blacksmith
+was a near-twin of the Barracks at map scale. The other 3×3 buildings all split
+the other way, so this one turning ninety degrees is free silhouette separation.
 
----
+**Three things the render caught that reading the code did not:** the dividing
+beam was drawn last and ran straight through the chimney; the heat wash was
+applied over the whole footprint and turned the roof to mud (it is clipped to
+the bay now); and the anvil sat on a stump the same size as itself, which read
+as a cooking pot. All three looked perfectly reasonable as source.
+
+Current palette: shingle `#43362a` / `#6b5844`, stone `#b0a898` / `#8c8478` /
+`#6e675c`, flagstone `#9a9184`, forge `rgba(255,172,52,…)` over `#2a1206`.
+Team colour: ridge beam, blade pommels.
 
 # Bonus: the Gold Seam
 
@@ -256,7 +280,22 @@ Same three questions as the character doc, per building:
 
 # Suggested order
 
-The Barracks and Blacksmith are the weakest and the most looked-at, so they'd
-repay a reference first. The Farm matters because of how many are on screen. The
-Altar is the one with the most upside — it should feel significant and currently
-doesn't.
+Three left: **Workshop**, **Altar of Embers** and **Guard Tower**. The Altar has
+the most upside — it should feel like the most important building you own and
+currently reads as a shed with a fire on it.
+
+# How these get reviewed now
+
+There is no browser in the loop, so until the Blacksmith the only way to judge
+this art was to read the drawing code and picture it. That missed three
+plain-sight faults in a row. There are now two small tools that fix it:
+
+    node tools/art_record.js <type> <owner> [anim] out.json
+    python3 tools/art_replay.py out.json out.png
+
+The first records every canvas call the game makes drawing one building; the
+second replays them into a PNG with Pillow at 8x and downsamples. Render at true
+size as well as zoomed — a building is judged at 64 or 96 pixels, and things
+that look finished at 4x (the farm chimney, the smith's anvil) fall apart or
+take over at 1x. For the Farm it is also worth pasting three side by side,
+because *not blurring into its neighbours* is most of that building's job.

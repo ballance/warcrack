@@ -340,7 +340,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · mining';
+const BUILD = '2026-10-15 · forge';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -5741,17 +5741,137 @@ function drawBuildingShape(b, x, y) {
       drawCastle(b, x, y, w, h, f, flash);
       break;
     case 'farm': {
-      ctx.fillRect(x0 + 4, y0 + 12, w - 8, h - 16);
-      ctx.fillStyle = '#8a6a3a';
+      // Only 2x2 — 64px — and you will have eight of these on screen at once, so
+      // the job is to stay quiet while still being told apart from its
+      // neighbours. Golden thatch and a green crop plot do most of that work:
+      // nothing else on the map is either colour. The silhouette is deliberately
+      // asymmetric — a steep thatched longhouse with the chimney at one end, and
+      // a fenced plot alongside — so a row of farms reads as several buildings
+      // rather than one blob, which the first version did not.
+      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
+      const thatch = flash ? '#e0b8a8' : '#b08e49';
+      const thatchLit = flash ? '#f0d0c0' : '#ddc07c';
+      const soil = '#6b4f33', soilDark = '#55402a';
+      const leaf = '#4f9838', leafLit = '#78c457';
+      const stone = '#8c8478';
+      const ink = 'rgba(18,14,10,.95)';
+      const bx0 = x0 + 3, bx1 = x0 + w - 3, by0 = y0 + 3, by1 = y0 + h - 3;
+      const splitX = x0 + w * 0.56;
+
+      // --- crop plot: tilled soil in rows, the pen's whole point ---
+      ctx.fillStyle = soil;
+      ctx.fillRect(splitX, by0, bx1 - splitX, by1 - by0);
+      ctx.strokeStyle = soilDark; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const ry = by0 + i * (by1 - by0) / 4;
+        ctx.beginPath(); ctx.moveTo(splitX, ry); ctx.lineTo(bx1, ry); ctx.stroke();
+      }
+      for (let row = 0; row < 3; row++) {                 // cabbages in their rows
+        for (let cI = 0; cI < 3; cI++) {
+          const cxp = splitX + 5 + cI * 7.5, cyp = by0 + 19 + row * 8;
+          if (cyp > by1 - 11 || cxp > bx1 - 3) continue;
+          ctx.fillStyle = leaf;
+          ctx.beginPath(); ctx.arc(cxp, cyp, 3.1, 0, 6.3); ctx.fill();
+          ctx.strokeStyle = ink; ctx.lineWidth = 0.9; ctx.stroke();
+          ctx.fillStyle = leafLit;
+          ctx.beginPath(); ctx.arc(cxp - 0.9, cyp - 0.9, 1.4, 0, 6.3); ctx.fill();
+        }
+      }
+      // haystack at the head of the plot, with its pole
+      const hsx = splitX + (bx1 - splitX) / 2, hsy = by0 + 9;
+      ctx.fillStyle = '#c9a44e';
+      ctx.beginPath(); ctx.arc(hsx, hsy, 8, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.fillStyle = '#dcbb63';                        // domed top catching the light
+      ctx.beginPath(); ctx.arc(hsx - 1.5, hsy - 1.5, 5, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = 'rgba(140,104,38,.55)'; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {                      // loose straw at the skirt only
+        const a2 = 0.5 + i * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(hsx + Math.cos(a2) * 5.5, hsy + Math.sin(a2) * 5.5);
+        ctx.lineTo(hsx + Math.cos(a2) * 8, hsy + Math.sin(a2) * 8); ctx.stroke();
+      }
+      ctx.fillStyle = beamDark;                          // the pole through the middle
+      ctx.fillRect(hsx - 1, hsy - 3, 2, 5);
+      // water trough at the foot of the plot
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(splitX + 3, by1 - 9, bx1 - splitX - 6, 7);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+      ctx.strokeRect(splitX + 3, by1 - 9, bx1 - splitX - 6, 7);
+      ctx.fillStyle = '#4a7fb5';
+      ctx.fillRect(splitX + 5, by1 - 7, bx1 - splitX - 10, 3);
+      // post-and-rail fence down the open sides
+      ctx.strokeStyle = beamMid; ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.moveTo(x0 + 2, y0 + 14); ctx.lineTo(x, y0 + 1); ctx.lineTo(x0 + w - 2, y0 + 14);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#c3a85f';
-      for (let i = 0; i < 3; i++) ctx.fillRect(x0 + 6 + i * 6, y0 + h - 12, 3, 8);
+      ctx.moveTo(splitX, by0 + 2); ctx.lineTo(bx1, by0 + 2);
+      ctx.moveTo(bx1 - 1, by0); ctx.lineTo(bx1 - 1, by1);
+      ctx.moveTo(splitX, by1 - 1); ctx.lineTo(bx1, by1 - 1);
+      ctx.stroke();
+      ctx.fillStyle = beamDark;
+      for (const px2 of [splitX + 2, hsx, bx1 - 2]) {
+        ctx.fillRect(px2 - 1.5, by0 + 1, 3, 4);
+        ctx.fillRect(px2 - 1.5, by1 - 4, 3, 4);
+      }
+
+      // --- the longhouse: steep thatch, ridge running top to bottom ---
+      const rx0 = bx0, rx1 = splitX, ridge = (rx0 + rx1) / 2;
+      ctx.fillStyle = thatchLit;
+      ctx.fillRect(rx0, by0, ridge - rx0, by1 - by0);
+      ctx.fillStyle = thatch;
+      ctx.fillRect(ridge, by0, rx1 - ridge, by1 - by0);
+      ctx.strokeStyle = 'rgba(90,64,24,.16)'; ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i++) {                       // straw, combed down the slope
+        const sx = rx0 + 3 + i * (rx1 - rx0 - 6) / 4;
+        ctx.beginPath(); ctx.moveTo(sx, by0 + 2); ctx.lineTo(sx, by1 - 2); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(90,64,24,.34)'; ctx.lineWidth = 1.4;
+      for (let i = 1; i < 3; i++) {                       // bound courses across it
+        const cy2 = by0 + i * (by1 - by0) / 3;
+        ctx.beginPath(); ctx.moveTo(rx0, cy2); ctx.lineTo(rx1, cy2); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(120,88,32,.4)';               // shaded under the eaves
+      ctx.fillRect(rx0, by1 - 5, rx1 - rx0, 5);
+      ctx.fillStyle = '#a8842e';                          // ragged eave fringe
+      for (let i = 0; i < 6; i++) {
+        const fy2 = by0 + 3 + i * (by1 - by0 - 6) / 5;
+        ctx.fillRect(rx0 - 2, fy2, 3, 4);
+        ctx.fillRect(rx1 - 1, fy2 + 2, 3, 4);
+      }
+      // team-coloured ridge beam with timber cleats
       ctx.fillStyle = f.color;
-      ctx.fillRect(x0 + 4, y0 + 14, w - 8, 3);
+      ctx.fillRect(ridge - 2.5, by0 - 1, 5, by1 - by0 + 2);
+      ctx.fillStyle = f.light;
+      ctx.fillRect(ridge - 2.5, by0 - 1, 1.6, by1 - by0 + 2);
+      ctx.fillStyle = beam;
+      for (let i = 0; i < 3; i++) ctx.fillRect(ridge - 4, by0 + 6 + i * (by1 - by0 - 16) / 2, 8, 5);
+      // stone chimney at the near end
+      ctx.fillStyle = stone;
+      ctx.fillRect(rx0 + 4, by0 + 5, 10, 10);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(rx0 + 4, by0 + 5, 10, 10);
+      ctx.fillStyle = '#17120d';
+      ctx.fillRect(rx0 + 6.5, by0 + 7.5, 5, 5);
+
+      // --- timber frame and corner blocks, in the shared house style ---
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(x0 + 1, y0 + 1, w - 2, 4);
+      ctx.fillRect(x0 + 1, y0 + h - 5, w - 2, 4);
+      ctx.fillRect(x0 + 1, y0 + 1, 4, h - 2);
+      ctx.fillRect(x0 + w - 5, y0 + 1, 4, h - 2);
+      ctx.fillStyle = beamDark;
+      ctx.fillRect(splitX - 2, y0 + 1, 4, h - 2);
+      ctx.fillStyle = corner;
+      const blocks = [[x0, y0], [x0 + w - 8, y0], [x0, y0 + h - 8], [x0 + w - 8, y0 + h - 8],
+                      [splitX - 4, y0], [splitX - 4, y0 + h - 8]];
+      for (const bl of blocks) {
+        ctx.fillRect(bl[0], bl[1], 8, 8);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.1;
+        ctx.strokeRect(bl[0], bl[1], 8, 8);
+      }
+      drawFlag(x0 + w - 5, y0 + 5, f);
       break;
     }
+
     case 'barracks': {
       // Footprint splits into a timber-framed hall under a shingled gable and an
       // open training yard. The team colour rides the roof ridge, which is the
@@ -5919,23 +6039,232 @@ function drawBuildingShape(b, x, y) {
       break;
     }
     case 'smith': {
-      ctx.fillRect(x0 + 3, y0 + 10, w - 6, h - 14);
-      ctx.fillStyle = '#4e463a';
-      ctx.fillRect(x0 + 3, y0 + 6, w - 6, 8);
-      // chimney + glow
-      ctx.fillStyle = '#5e5448';
-      ctx.fillRect(x0 + w - 18, y0 - 6, 12, 18);
-      const gl = 0.5 + 0.5 * Math.sin(b.anim * 3.1);
-      ctx.fillStyle = 'rgba(255,120,40,' + (0.25 + gl * 0.35) + ')';
-      ctx.beginPath(); ctx.arc(x0 + w - 12, y0 - 8, 7 + gl * 3, 0, 6.3); ctx.fill();
-      // anvil
-      ctx.fillStyle = '#2f2b26';
-      ctx.fillRect(x - 12, y + 6, 24, 7);
-      ctx.fillRect(x - 5, y + 13, 10, 7);
+      // A roofed hall behind, an open working bay in front, the chimney stack
+      // standing in the wall between them. The split runs across the footprint
+      // rather than down it, which is what the reference has and also keeps the
+      // Blacksmith from reading as the Barracks at a glance — the other 3x3
+      // buildings all split the other way.
+      //
+      // The forge is the only animated thing this building has, so it is given
+      // the room to act like one: a lit chimney mouth, a burning coal bed below
+      // it, and a warm wash across the bay. The wash is clipped to the bay on
+      // purpose; thrown over the whole footprint it just turns the roof muddy.
+      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
+      const shingle = flash ? '#7a5e52' : '#43362a';
+      const shingleLit = flash ? '#9a7a6a' : '#6b5844';
+      const stone = '#b0a898', stoneMid = '#8c8478', stoneDark = '#6e675c';
+      const floor = '#9a9184', floorWarm = '#b4906a';
+      const ink = 'rgba(18,14,10,.95)';
+      const gl = 0.5 + 0.5 * Math.sin(b.anim * 3.1);        // forge pulse
+      const splitY = y0 + h * 0.45;
+      const bx0 = x0 + 5, bx1 = x0 + w - 5;                 // bay bounds
+      const chw = 24, chh = 26, chx = x0 + w * 0.66 - chw / 2, chy = splitY - 15;
+
+      // --- working bay floor: flagstones, warming toward the forge ---
+      ctx.fillStyle = floor;
+      ctx.fillRect(bx0, splitY, bx1 - bx0, y0 + h - 5 - splitY);
+      ctx.strokeStyle = 'rgba(40,34,26,.28)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const fy = splitY + i * (y0 + h - 5 - splitY) / 4;
+        ctx.beginPath(); ctx.moveTo(bx0, fy); ctx.lineTo(bx1, fy); ctx.stroke();
+      }
+      for (let i = 1; i < 5; i++) {
+        const fxp = bx0 + i * (bx1 - bx0) / 5;
+        ctx.beginPath(); ctx.moveTo(fxp, splitY); ctx.lineTo(fxp, y0 + h - 5); ctx.stroke();
+      }
+
+      // --- the hall: shingled gable, ridge running left to right ---
+      const ry0 = y0 + 5, ridgeY = (ry0 + splitY) / 2;
+      ctx.fillStyle = shingleLit;
+      ctx.fillRect(bx0, ry0, bx1 - bx0, ridgeY - ry0);
+      ctx.fillStyle = shingle;
+      ctx.fillRect(bx0, ridgeY, bx1 - bx0, splitY - ridgeY);
+      ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 1;
+      for (let row = 0; row < 6; row++) {                   // courses parallel to the ridge
+        const ry = ry0 + 3 + row * (splitY - ry0 - 3) / 6;
+        ctx.beginPath(); ctx.moveTo(bx0, ry); ctx.lineTo(bx1, ry); ctx.stroke();
+        for (let cI = 0; cI < 9; cI++) {
+          const cxp = bx0 + ((row % 2) ? 5 : 0) + cI * (bx1 - bx0) / 9;
+          if (cxp <= bx1 - 2) {
+            ctx.beginPath(); ctx.moveTo(cxp, ry); ctx.lineTo(cxp, ry + (splitY - ry0 - 3) / 6); ctx.stroke();
+          }
+        }
+      }
+      // team-coloured ridge beam with timber cleats
       ctx.fillStyle = f.color;
-      ctx.fillRect(x0 + 3, y0 + 6, w - 6, 3);
+      ctx.fillRect(bx0 - 1, ridgeY - 3, bx1 - bx0 + 2, 6);
+      ctx.fillStyle = f.light;
+      ctx.fillRect(bx0 - 1, ridgeY - 3, bx1 - bx0 + 2, 2);
+      ctx.fillStyle = beam;
+      for (let i = 0; i < 4; i++) ctx.fillRect(bx0 + 6 + i * (bx1 - bx0 - 22) / 3, ridgeY - 5, 10, 10);
+      // plank door and a stone-framed window in the front wall
+      const dxp = x0 + w * 0.2;
+      ctx.fillStyle = '#3a2a1c';
+      ctx.fillRect(dxp - 9, splitY - 13, 18, 12);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(dxp - 9, splitY - 13, 18, 12);
+      ctx.strokeStyle = '#4a4440'; ctx.lineWidth = 1.2;   // plank split and ring
+      ctx.beginPath(); ctx.moveTo(dxp, splitY - 12); ctx.lineTo(dxp, splitY - 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(dxp + 5, splitY - 7, 2, 0, 6.3); ctx.stroke();
+      ctx.fillStyle = stoneMid;                            // threshold step into the bay
+      ctx.fillRect(dxp - 11, splitY + 1, 22, 4);
+      ctx.fillStyle = stone;
+      ctx.fillRect(x0 + w * 0.42, splitY - 13, 13, 12);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+      ctx.strokeRect(x0 + w * 0.42, splitY - 13, 13, 12);
+      ctx.fillStyle = '#17120d';
+      ctx.fillRect(x0 + w * 0.42 + 3, splitY - 10, 7, 6);
+
+      // --- forge hearth: stone surround, burning coal bed ---
+      const hx = x0 + w * 0.5, hw = bx1 - hx - 2, hy = splitY + 9, hh = 21;
+      ctx.fillStyle = stoneMid;
+      ctx.fillRect(hx, hy, hw, hh);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.5;
+      ctx.strokeRect(hx, hy, hw, hh);
+      ctx.fillStyle = stoneDark;
+      ctx.fillRect(hx, hy + hh - 4, hw, 4);
+      ctx.fillStyle = '#2a1206';
+      ctx.fillRect(hx + 3, hy + 3, hw - 6, hh - 10);
+      ctx.fillStyle = 'rgba(224,68,26,' + (0.78 + gl * 0.22) + ')';
+      ctx.fillRect(hx + 4, hy + 4, hw - 8, hh - 12);
+      ctx.fillStyle = 'rgba(255,172,52,' + (0.5 + gl * 0.4) + ')';
+      ctx.fillRect(hx + 7, hy + 6, hw - 14, hh - 16);
+      for (let i = 0; i < 6; i++) {                          // heaped coals
+        const kx = hx + 7 + ((i * 6.5) % (hw - 14));
+        const ky = hy + 7 + ((i * 5) % 7);
+        ctx.fillStyle = (i % 3 === 0)
+          ? 'rgba(255,214,96,' + (0.6 + gl * 0.4) + ')'
+          : 'rgba(150,40,16,.85)';
+        ctx.beginPath(); ctx.arc(kx, ky, 2.1, 0, 6.3); ctx.fill();
+      }
+
+      // --- chimney stack in the dividing wall, mouth glowing ---
+      ctx.fillStyle = 'rgba(0,0,0,.3)';
+      ctx.fillRect(chx + 3, chy + 3, chw, chh);
+      ctx.fillStyle = stone;
+      ctx.fillRect(chx, chy, chw, chh);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.6;
+      ctx.strokeRect(chx, chy, chw, chh);
+      ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(chx, chy + i * chh / 3); ctx.lineTo(chx + chw, chy + i * chh / 3);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#17120d';
+      ctx.fillRect(chx + 6, chy + 7, chw - 12, chh - 14);
+      ctx.fillStyle = 'rgba(255,140,40,' + (0.7 + gl * 0.3) + ')';
+      ctx.fillRect(chx + 7, chy + 8, chw - 14, chh - 16);
+      ctx.fillStyle = 'rgba(255,228,140,' + (0.45 + gl * 0.5) + ')';
+      ctx.fillRect(chx + 9, chy + 10, chw - 18, chh - 20);
+
+      // --- the heat, washed across the bay only ---
+      const fcx = hx + hw / 2, fcy = hy + hh / 2;
+      const warm = ctx.createRadialGradient(fcx, fcy, 2, fcx, fcy, w * 0.44 + gl * 5);
+      warm.addColorStop(0, 'rgba(255,150,50,' + (0.26 + gl * 0.14) + ')');
+      warm.addColorStop(0.5, 'rgba(255,120,40,' + (0.09 + gl * 0.06) + ')');
+      warm.addColorStop(1, 'rgba(255,110,40,0)');
+      ctx.fillStyle = warm;
+      ctx.fillRect(bx0, splitY - 2, bx1 - bx0, y0 + h - 5 - splitY + 2);
+
+      // --- anvil on its stump: the thing you recognise it by ---
+      const avx = x0 + w * 0.25, avy = splitY + 15;
+      ctx.fillStyle = beamDark;                              // stump, just proud of the anvil
+      ctx.beginPath(); ctx.arc(avx, avy + 4, 9, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.fillStyle = '#39342d';                             // body, horn to the left
+      ctx.beginPath();
+      ctx.moveTo(avx - 14, avy + 1); ctx.lineTo(avx - 5, avy - 5);
+      ctx.lineTo(avx + 10, avy - 5); ctx.lineTo(avx + 10, avy + 4);
+      ctx.lineTo(avx - 5, avy + 4);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#7d766b';                             // lit working face
+      ctx.fillRect(avx - 4, avy - 3.5, 13, 5);
+      ctx.fillStyle = '#39342d';                             // hardy hole
+      ctx.fillRect(avx + 4, avy - 2, 3, 2.5);
+
+      // --- quench barrel ---
+      const qbx = x0 + w * 0.17, qby = splitY + 36;
+      ctx.fillStyle = beamMid;
+      ctx.beginPath(); ctx.arc(qbx, qby, 9, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = beamDark; ctx.lineWidth = 1;
+      for (let i = 0; i < 8; i++) {
+        const a2 = i * 0.785;
+        ctx.beginPath();
+        ctx.moveTo(qbx + Math.cos(a2) * 5, qby + Math.sin(a2) * 5);
+        ctx.lineTo(qbx + Math.cos(a2) * 9, qby + Math.sin(a2) * 9);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#4a7fb5';
+      ctx.beginPath(); ctx.arc(qbx, qby, 5.5, 0, 6.3); ctx.fill();
+      ctx.fillStyle = 'rgba(160,205,240,.85)';
+      ctx.beginPath(); ctx.arc(qbx - 2, qby - 2, 2, 0, 6.3); ctx.fill();
+
+      // --- grindstone on its trestle ---
+      const gsx = x0 + w * 0.38, gsy = splitY + 37;
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(gsx - 10, gsy - 4, 20, 11);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+      ctx.strokeRect(gsx - 10, gsy - 4, 20, 11);
+      ctx.fillStyle = '#cfc8bb';
+      ctx.beginPath(); ctx.ellipse(gsx, gsy, 8, 6, 0, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.fillStyle = '#6a6358';
+      ctx.beginPath(); ctx.arc(gsx, gsy, 2, 0, 6.3); ctx.fill();
+      ctx.strokeStyle = beamDark; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(gsx, gsy); ctx.lineTo(gsx + 10, gsy + 6); ctx.stroke();
+
+      // --- finished blades on a rack, and the charcoal crib ---
+      const rkx = x0 + w * 0.56, rky = y0 + h - 21;
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(rkx, rky, 19, 16);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(rkx, rky, 19, 16);
+      ctx.strokeStyle = '#e4e9f0'; ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(rkx + 6, rky + 4); ctx.lineTo(rkx + 6, rky + 13);
+      ctx.moveTo(rkx + 12, rky + 4); ctx.lineTo(rkx + 12, rky + 13);
+      ctx.stroke();
+      ctx.fillStyle = f.color;
+      ctx.beginPath(); ctx.arc(rkx + 6, rky + 3, 2.1, 0, 6.3); ctx.fill();
+      ctx.beginPath(); ctx.arc(rkx + 12, rky + 3, 2.1, 0, 6.3); ctx.fill();
+      const ccx = x0 + w - 27, ccy = y0 + h - 21;
+      ctx.fillStyle = beamDark;
+      ctx.fillRect(ccx, ccy, 22, 16);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.3;
+      ctx.strokeRect(ccx, ccy, 22, 16);
+      ctx.fillStyle = '#1d1916';
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.arc(ccx + 5 + (i % 3) * 6, ccy + 5 + Math.floor(i / 3) * 6, 3, 0, 6.3);
+        ctx.fill();
+      }
+
+      // --- timber frame and corner blocks, matching the Barracks ---
+      ctx.fillStyle = beamMid;
+      ctx.fillRect(x0 + 2, y0 + 2, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + h - 8, w - 4, 6);
+      ctx.fillRect(x0 + 2, y0 + 2, 6, h - 4);
+      ctx.fillRect(x0 + w - 8, y0 + 2, 6, h - 4);
+      // the dividing wall beam, broken where the chimney passes through it
+      ctx.fillStyle = beamDark;
+      ctx.fillRect(x0 + 2, splitY - 3, chx - 2 - (x0 + 2), 6);
+      ctx.fillRect(chx + chw + 2, splitY - 3, x0 + w - 2 - (chx + chw + 2), 6);
+      ctx.fillStyle = corner;
+      const blocks = [[x0 + 1, y0 + 1], [x0 + w - 11, y0 + 1], [x0 + 1, y0 + h - 11],
+                      [x0 + w - 11, y0 + h - 11], [x0 + 1, splitY - 5], [x0 + w - 11, splitY - 5],
+                      [x0 + w / 2 - 5, y0 + 1], [x0 + w / 2 - 5, y0 + h - 11]];
+      for (const bl of blocks) {
+        ctx.fillRect(bl[0], bl[1], 10, 10);
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
+        ctx.strokeRect(bl[0], bl[1], 10, 10);
+      }
+      drawFlag(x0 + w - 6, y0 + 6, f);
       break;
     }
+
     default:
       ctx.fillRect(x0 + 4, y0 + 6, w - 8, h - 10);
   }
