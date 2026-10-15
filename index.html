@@ -1101,7 +1101,14 @@ function spawnBuilding(type, owner, tx, ty, instant) {
     alertT: 0, repairers: 0
   };
   b.px = b.x; b.py = b.y;
-  b.rallyX = b.x; b.rallyY = b.y + (d.th * TILE / 2) + 34;
+  // Egress faces the middle of the map rather than always south. Fixed-south
+  // meant the bottom-left base sent every new unit toward the map edge while
+  // the top-right base sent its units toward the enemy — a few tiles per unit,
+  // every unit, all game. Self-play measured it as a 34/66 win split.
+  const egress = Math.atan2(WORLD * 0.5 - b.y, WORLD * 0.5 - b.x);
+  const reach = Math.max(d.tw, d.th) * TILE * 0.5;
+  b.rallyX = b.x + Math.cos(egress) * (reach + 34);
+  b.rallyY = b.y + Math.sin(egress) * (reach + 34);
   occupy(tx, ty, d.tw, d.th, 1);
   Grid.dirtyMini = true;
   G.ents.push(b); G.byId.set(b.id, b);
@@ -1990,7 +1997,7 @@ function dealDamage(src, tgt, amount, dtype) {
     }
   }
   if (tgt.owner === 0) underAttackAlert(tgt);
-  if (tgt.owner === 1 && G.ai) G.ai.onAttacked(tgt, src);
+  if (G.ais && G.ais[tgt.owner]) G.ais[tgt.owner].onAttacked(tgt, src);
   if (tgt.hp <= 0) killEntity(tgt, src);
   return amt;
 }
@@ -2290,7 +2297,11 @@ function canPlaceAt(type, tx, ty, owner) {
       const t = G.terr[i];
       if (t !== T_GRASS && t !== T_DIRT) return false;
       if (Grid.occ[i]) return false;
-      if (owner === 0 && !p.fog.explored[i]) return false;
+      // You cannot build where you have never looked. This was keyed to
+      // `owner === 0`, which made it a property of being player 0 rather than a
+      // rule of the game: the AI could site buildings in fog the human could
+      // not. It applies to everyone now.
+      if (!p.fog.explored[i]) return false;
     }
   }
   // keep a one-tile skirt free of other structures so units can path around
@@ -2348,8 +2359,9 @@ function completeBuilding(b) {
   Grid.dirtyMini = true;
 }
 
+function aiRun(owner) { return !!(G.ais && G.ais[owner]); }
 function trainTime(type, owner) {
-  return UNITS[type].buildTime * (owner === 1 ? G.diff.trainMul : 1);
+  return UNITS[type].buildTime * (aiRun(owner) ? G.diff.trainMul : 1);
 }
 function queueUnit(b, type) {
   const p = G.players[b.owner];
@@ -2385,8 +2397,10 @@ function cancelQueue(b, index) {
 function spawnFromBuilding(b, type) {
   const d = UNITS[type];
   const p = G.players[b.owner];
-  // find a free tile on the building's skirt
-  let sx = b.x, sy = b.y + b.th * TILE * 0.5 + 12;
+  // find a free tile on the building's skirt, on the side facing the map centre
+  const eg = Math.atan2(WORLD * 0.5 - b.y, WORLD * 0.5 - b.x);
+  const out = Math.max(b.tw, b.th) * TILE * 0.5 + 12;
+  let sx = b.x + Math.cos(eg) * out, sy = b.y + Math.sin(eg) * out;
   const n = nearestPassable(w2t(sx), w2t(sy), 7);
   if (n >= 0) { sx = t2w(n % M); sy = t2w((n / M) | 0); }
   const u = spawnUnit(type, b.owner, sx, sy);
@@ -2404,7 +2418,7 @@ function spawnFromBuilding(b, type) {
     setOrder(u, { t: 'move', x: sx + (Math.random() - 0.5) * 40, y: sy + 26 + Math.random() * 20 });
   }
   if (b.owner === 0) { sfx('ready'); addMsg(unitDisplayName(u) + ' ready.'); }
-  if (b.owner === 1 && G.ai) G.ai.onUnitReady(u);
+  if (G.ais && G.ais[b.owner]) G.ais[b.owner].onUnitReady(u);
   return u;
 }
 function startUpgradeResearch(b, kind) {
@@ -2418,7 +2432,7 @@ function startUpgradeResearch(b, kind) {
   if (L.req === 'keep' && !p.hasKeep) { if (b.owner === 0) { addMsg(u.name + ' level 2 requires a Keep.'); sfx('nope'); } return false; }
   if (!canAfford(p, L.gold, L.lumber)) { if (b.owner === 0) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
   pay(p, L.gold, L.lumber);
-  b.upKind = kind; b.upT = 0; b.upTotal = L.time * (b.owner === 1 ? G.diff.trainMul : 1);
+  b.upKind = kind; b.upT = 0; b.upTotal = L.time * (aiRun(b.owner) ? G.diff.trainMul : 1);
   if (b.owner === 0) sfx('ack');
   return true;
 }
@@ -2428,7 +2442,7 @@ function startKeepUpgrade(b) {
   if (b.type !== 'hall' || b.upKind || !b.built || b.dead) return false;
   if (!canAfford(p, d.gold, d.lumber)) { if (b.owner === 0) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
   pay(p, d.gold, d.lumber);
-  b.upKind = 'keep'; b.upT = 0; b.upTotal = d.time * (b.owner === 1 ? G.diff.buildMul : 1);
+  b.upKind = 'keep'; b.upT = 0; b.upTotal = d.time * (aiRun(b.owner) ? G.diff.buildMul : 1);
   if (b.owner === 0) sfx('ack');
   return true;
 }
@@ -2472,7 +2486,7 @@ function tickBuilding(b) {
 
   if (!b.built) {
     if (b.builders > 0) {
-      const total = b.def.time * (b.owner === 1 ? G.diff.buildMul : 1);
+      const total = b.def.time * (aiRun(b.owner) ? G.diff.buildMul : 1);
       const speed = 1 + (b.builders - 1) * 0.45;
       b.buildProg += (speed / total) * DT;
       b.hp = Math.min(b.maxHp, b.maxHp * (0.1 + 0.9 * b.buildProg));
@@ -2704,8 +2718,11 @@ function armyValue(units) {
 }
 
 function makeAI(p) {
+  const foe = p.id === 0 ? 1 : 0;                       // who this AI is fighting
+  const foeBase = p.id === 0 ? G.base1 : G.base0;       // fallback target before scouting
   const ai = {
     p: p,
+    foe: foe,
     acc: 0,
     phase: 'open',
     waveT: 0,
@@ -2721,8 +2738,9 @@ function makeAI(p) {
 
     init() {
       const hall = playerBuildings(p).find(b => b.def.dropoff);
-      this.homeX = hall ? hall.x : t2w(G.base1.x);
-      this.homeY = hall ? hall.y : t2w(G.base1.y);
+      const myBase = p.id === 0 ? G.base0 : G.base1;
+      this.homeX = hall ? hall.x : t2w(myBase.x);
+      this.homeY = hall ? hall.y : t2w(myBase.y);
       const cx = WORLD * 0.5, cy = WORLD * 0.5;
       const a = Math.atan2(cy - this.homeY, cx - this.homeX);
       this.stageX = this.homeX + Math.cos(a) * 190;
@@ -2733,7 +2751,7 @@ function makeAI(p) {
     },
 
     onAttacked(e, src) {
-      if (!src || src.owner !== 0) return;
+      if (!src || src.owner !== foe) return;
       if (e.kind === 'building' || dist(e.x, e.y, this.homeX, this.homeY) < 14 * TILE) {
         this.defendT = 22; this.defX = e.x; this.defY = e.y;
       }
@@ -2971,20 +2989,20 @@ function makeAI(p) {
       const mem = p.fog.memory;
       let best = null, bd = Infinity;
       mem.forEach(v => {
-        if (v.owner !== 0) return;
+        if (v.owner !== foe) return;
         const d = dist2(v.x, v.y, this.homeX, this.homeY);
         if (d < bd) { bd = d; best = v; }
       });
       if (best) return { x: best.x, y: best.y };
       // live sight
       for (const e of G.ents) {
-        if (e.dead || e.owner !== 0 || e.kind !== 'building') continue;
+        if (e.dead || e.owner !== foe || e.kind !== 'building') continue;
         if (!p.fog.vis[ti(w2t(e.x), w2t(e.y))]) continue;
         const d = dist2(e.x, e.y, this.homeX, this.homeY);
         if (d < bd) { bd = d; best = { x: e.x, y: e.y }; }
       }
       if (best) return best;
-      return { x: t2w(G.base0.x), y: t2w(G.base0.y) };
+      return { x: t2w(foeBase.x), y: t2w(foeBase.y) };
     },
 
     manageArmy() {
@@ -7270,7 +7288,7 @@ function makePlayer(id) {
   };
 }
 
-function startGame(seedText, diffKey) {
+function startGame(seedText, diffKey, opts) {
   sfxInit();
   const map = genMap(seedText);
   __uid = 1;
@@ -7293,7 +7311,9 @@ function startGame(seedText, diffKey) {
     revealed: [false, false, false],
     hoverEnt: null, lastAlertX: 0, lastAlertY: 0, pingT: 0,
     badTrees: new Map(),
-    ai: null, over: null, endT: 0
+    ai: null, ais: null, over: null, endT: 0,
+    selfPlay: !!(opts && opts.selfPlay),
+    swapBases: !!(opts && opts.swapBases)
   };
   G.players[2].name = 'Wilds';
   input.placing = null; input.targetMode = null; input.castKey = null;
@@ -7307,9 +7327,12 @@ function startGame(seedText, diffKey) {
   // creep camps
   setupCamps(map.camps);
 
-  // starting bases
+  // starting bases. swapBases is a fairness-testing hook: it puts each player at
+  // the other's start so self-play can tell a positional advantage apart from an
+  // advantage that follows the player index through order-dependent code.
   for (let pid = 0; pid < 2; pid++) {
-    const b = pid === 0 ? map.base0 : map.base1;
+    const atTopRight = G.swapBases ? (pid === 0) : (pid === 1);
+    const b = atTopRight ? map.base1 : map.base0;
     const hall = spawnBuilding('hall', pid, b.x - 2, b.y - 2, true);
     const p = G.players[pid];
     p.hasHall = true;
@@ -7331,8 +7354,14 @@ function startGame(seedText, diffKey) {
     recomputeFood(p);
   }
 
-  G.ai = makeAI(G.players[1]);
-  G.ai.init();
+  G.ais = [null, null];
+  G.ais[1] = makeAI(G.players[1]);
+  G.ais[1].init();
+  if (G.selfPlay) {                       // player 0 driven by the same code
+    G.ais[0] = makeAI(G.players[0]);
+    G.ais[0].init();
+  }
+  G.ai = G.ais[1];                        // kept for anything still naming it
 
   updateFog(G.players[0]); updateFog(G.players[1]);
   const h0 = playerBuildings(G.players[0])[0];
@@ -7391,7 +7420,15 @@ function simTick() {
   }
 
   if (G.tick % 6 === 0) { updateFog(G.players[0]); updateFog(G.players[1]); }
-  if (G.tick % 15 === 0 && G.ai) G.ai.tick();
+  if (G.tick % 15 === 0 && G.ais) {
+    // Alternate which side thinks first. Stepping one AI consistently ahead of
+    // the other hands it the first attack every wave, and attacking into a
+    // defender is the losing side of that trade — self-play measured the side
+    // that always moved second winning about two games in three.
+    const first = ((G.tick / 15) | 0) % 2;
+    if (G.ais[first]) G.ais[first].tick();
+    if (G.ais[1 - first]) G.ais[1 - first].tick();
+  }
 
   sweepDead();
   if (G.tick % 30 === 0) checkEnd();
