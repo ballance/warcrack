@@ -340,7 +340,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · forge';
+const BUILD = '2026-10-15 · embers';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -5710,7 +5710,12 @@ function drawBuildingShape(b, x, y) {
   const flash = b.hitFlash > 0;
 
   ctx.fillStyle = 'rgba(0,0,0,.33)';
-  ctx.fillRect(x0 + 5, y0 + 7, w - 6, h - 4);
+  if (b.type === 'altar') {
+    // the Altar is round, and a square shadow under it shows at the corners
+    ctx.beginPath(); ctx.ellipse(x + 2, y + 4, w * 0.47, h * 0.47, 0, 0, 6.3); ctx.fill();
+  } else {
+    ctx.fillRect(x0 + 5, y0 + 7, w - 6, h - 4);
+  }
 
   if (!b.built) {
     // scaffold
@@ -6010,22 +6015,212 @@ function drawBuildingShape(b, x, y) {
       break;
     }
     case 'altar': {
-      ctx.fillStyle = '#6f6554';
-      ctx.beginPath(); ctx.ellipse(x, y + 6, w * 0.42, h * 0.3, 0, 0, 6.3); ctx.fill();
-      ctx.fillStyle = '#847a66';
-      for (let i = 0; i < 4; i++) {
-        const a = i * 1.57 + 0.4;
-        ctx.fillRect(x + Math.cos(a) * w * 0.3 - 4, y + Math.sin(a) * h * 0.22 - 16, 8, 20);
+      // The only round building on the map, and that is most of why it reads as
+      // the important one: everything else is a square under a pitched roof.
+      // Three stepped tiers, a stair cut into the near side between rune-carved
+      // balustrades, five standing stones around the rim with team-coloured
+      // banners strung between them, and a built fire bowl at the centre.
+      //
+      // The brief was that the glow should sit in something built rather than
+      // float on a disc, so the architecture is drawn first and the flame is
+      // sized to the bowl rather than to the footprint. The bowl is small — a
+      // sixth of the width — and it still dominates, because it is the only
+      // bright thing inside a lot of grey stone.
+      const lit = flash ? '#f0ddd2' : '#bcb09b';
+      const mid = flash ? '#dcc0b2' : '#9a8f79';
+      const step = flash ? '#e6cec1' : '#aa9f88';
+      const shade = flash ? '#9c7f72' : '#564e42';
+      const bowlStone = flash ? '#a88a7c' : '#6e665a';
+      const iron = '#33302b';
+      const ink = 'rgba(18,14,10,.95)';
+      const rune = 'rgba(52,46,36,.75)';
+      const pulse = 0.55 + 0.3 * Math.sin(b.anim * 3.4) + 0.15 * Math.sin(b.anim * 7.9);
+      const R0 = w * 0.47, R1 = w * 0.385, R2 = w * 0.30, RS = w * 0.345;
+      const SA = 68 * Math.PI / 180, SB = 112 * Math.PI / 180;   // the stair opening
+      const TAU = Math.PI * 2;
+
+      const disc = (r, fill) => {
+        ctx.fillStyle = fill;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      };
+      const joints = (rIn, rOut, n, from, to) => {         // block divisions in a tier
+        ctx.strokeStyle = 'rgba(40,34,26,.26)'; ctx.lineWidth = 1;
+        for (let i = 0; i <= n; i++) {
+          const a = from + (to - from) * i / n;
+          ctx.beginPath();
+          ctx.moveTo(x + Math.cos(a) * rIn, y + Math.sin(a) * rIn);
+          ctx.lineTo(x + Math.cos(a) * rOut, y + Math.sin(a) * rOut);
+          ctx.stroke();
+        }
+      };
+
+      // --- three stepped tiers, lightening as they rise ---
+      disc(R0, shade);
+      disc(R0 - 2.5, mid);
+      joints(R1, R0 - 2.5, 12, SB, SA + TAU);
+      disc(R1, shade);
+      disc(R1 - 2.5, step);
+      joints(R2, R1 - 2.5, 10, SB, SA + TAU);
+      disc(R2, shade);
+      disc(R2 - 2.5, lit);
+      // paving on the upper platform
+      ctx.strokeStyle = 'rgba(40,34,26,.26)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, R2 * 0.62, 0, TAU); ctx.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = i * TAU / 8 + 0.2;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * R2 * 0.62, y + Math.sin(a) * R2 * 0.62);
+        ctx.lineTo(x + Math.cos(a) * (R2 - 2.5), y + Math.sin(a) * (R2 - 2.5));
+        ctx.stroke();
       }
-      const pulse = 0.6 + 0.4 * Math.sin(b.anim * 2.2);
-      ctx.fillStyle = 'rgba(255,150,60,' + (0.3 * pulse) + ')';
-      ctx.beginPath(); ctx.arc(x, y - 4, 20 * pulse, 0, 6.3); ctx.fill();
-      ctx.fillStyle = '#ffb24a';
-      ctx.beginPath(); ctx.arc(x, y - 4, 7 + pulse * 2, 0, 6.3); ctx.fill();
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x - w * 0.4, y + h * 0.3, w * 0.8, 3);
+
+      // --- the stair, cut through both lower tiers on the near side ---
+      ctx.fillStyle = flash ? '#c9a99b' : '#857a66';
+      ctx.beginPath();
+      ctx.arc(x, y, R0 - 1, SA, SB);
+      ctx.arc(x, y, R2 - 3, SB, SA, true);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(26,20,14,.8)'; ctx.lineWidth = 1.5;
+      for (let i = 1; i < 5; i++) {                        // the treads
+        const r = R2 - 3 + i * (R0 - 1 - (R2 - 3)) / 5;
+        ctx.beginPath(); ctx.arc(x, y, r, SA, SB); ctx.stroke();
+      }
+      // rune-carved balustrades flanking it
+      for (const ba of [SA, SB]) {
+        const ux = Math.cos(ba), uy = Math.sin(ba), px2 = -uy, py2 = ux;
+        const p = (d, o) => [x + ux * d + px2 * o, y + uy * d + py2 * o];
+        const inr = R2 - 4, out = R0 + 1, hw = 3.2;
+        const q = [p(inr, -hw), p(inr, hw), p(out, hw), p(out, -hw)];
+        ctx.fillStyle = shade;
+        ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]);
+        for (let i = 1; i < 4; i++) ctx.lineTo(q[i][0], q[i][1]);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = ink; ctx.lineWidth = 1.3; ctx.stroke();
+        ctx.fillStyle = 'rgba(210,200,180,.55)';           // a lozenge cut into it
+        const c2 = p((inr + out) / 2, 0);
+        ctx.beginPath();
+        ctx.moveTo(c2[0], c2[1] - 3); ctx.lineTo(c2[0] + 2.2, c2[1]);
+        ctx.lineTo(c2[0], c2[1] + 3); ctx.lineTo(c2[0] - 2.2, c2[1]);
+        ctx.closePath(); ctx.fill();
+      }
+
+      // --- five standing stones around the rim ---
+      const STONES = [30, 150, 210, 270, 330].map(d => d * Math.PI / 180);
+      const stoneAt = (ang) => {
+        const ux = Math.cos(ang), uy = Math.sin(ang), px2 = -uy, py2 = ux;
+        const p = (d, o) => [x + ux * (RS + d) + px2 * o, y + uy * (RS + d) + py2 * o];
+        const quad = (pts, fill, lw) => {
+          ctx.fillStyle = fill;
+          ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+          for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+          ctx.closePath(); ctx.fill();
+          if (lw) { ctx.strokeStyle = ink; ctx.lineWidth = lw; ctx.stroke(); }
+        };
+        // tapered: narrow toward the fire, wider at the outer face
+        const body = [p(-6, -5.4), p(-6, 5.4), p(6.5, 7.2), p(6.5, -7.2)];
+        quad(body.map(q2 => [q2[0] + 2.5, q2[1] + 3.5]), 'rgba(0,0,0,.42)', 0);
+        quad(body, flash ? '#c9a99b' : '#7d7360', 1.7);
+        quad([p(-3.8, -3.6), p(-3.8, 3.6), p(4.4, 5), p(4.4, -5)], mid, 0);
+        ctx.fillStyle = 'rgba(28,23,17,.8)';               // carved lozenge and bar
+        const c2 = p(1, 0);
+        ctx.beginPath();
+        ctx.moveTo(c2[0], c2[1] - 3.2); ctx.lineTo(c2[0] + 2.4, c2[1]);
+        ctx.lineTo(c2[0], c2[1] + 3.2); ctx.lineTo(c2[0] - 2.4, c2[1]);
+        ctx.closePath(); ctx.fill();
+        const c3 = p(-3.4, 0);
+        ctx.fillRect(c3[0] - 2, c3[1] - 0.8, 4, 1.6);
+      };
+
+      // --- banners: swags across the back pair, pennants on the front stones ---
+      const swag = (a1, a2) => {
+        const r = RS - 5;
+        const x1 = x + Math.cos(a1) * r, y1 = y + Math.sin(a1) * r;
+        const x2 = x + Math.cos(a2) * r, y2 = y + Math.sin(a2) * r;
+        const am = (a1 + a2) / 2;
+        const cx2 = x + Math.cos(am) * (r - 11), cy2 = y + Math.sin(am) * (r - 11);
+        ctx.strokeStyle = f.dark; ctx.lineWidth = 5.5;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx2, cy2, x2, y2); ctx.stroke();
+        ctx.strokeStyle = f.color; ctx.lineWidth = 3.6;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx2, cy2, x2, y2); ctx.stroke();
+        ctx.strokeStyle = f.light; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx2, cy2, x2, y2); ctx.stroke();
+      };
+      swag(STONES[1], STONES[2]);        // 150 -> 210, down the left
+      swag(STONES[2], STONES[3]);        // 210 -> 270
+      swag(STONES[3], STONES[4]);        // 270 -> 330
+      swag(STONES[4], STONES[0] + TAU);  // 330 -> 390, down the right
+      for (const a of STONES) stoneAt(a);
+
+      // --- scorch, then the firelight spilling across the stone ---
+      ctx.fillStyle = 'rgba(42,26,14,.3)';
+      for (let i = 0; i < 7; i++) {
+        const a = i * TAU / 7 + 0.5;
+        const d = 18 + (i % 3) * 3;
+        ctx.beginPath();
+        ctx.ellipse(x + Math.cos(a) * d, y + Math.sin(a) * d, 4 + (i % 2) * 2, 3, a, 0, TAU);
+        ctx.fill();
+      }
+      const glow = ctx.createRadialGradient(x, y, 2, x, y, R2 + 6 + pulse * 5);
+      glow.addColorStop(0, 'rgba(255,170,70,' + (0.4 + pulse * 0.2) + ')');
+      glow.addColorStop(0.45, 'rgba(255,130,40,' + (0.16 + pulse * 0.1) + ')');
+      glow.addColorStop(1, 'rgba(255,110,40,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(x, y, R2 + 6 + pulse * 5, 0, TAU); ctx.fill();
+
+      // --- the fire bowl: masonry drum on a plinth ---
+      ctx.fillStyle = 'rgba(0,0,0,.32)';
+      ctx.beginPath(); ctx.ellipse(x + 2, y + 3, 16, 16, 0, 0, TAU); ctx.fill();
+      disc(16, shade);
+      disc(14.5, mid);
+      disc(13, bowlStone);
+      ctx.strokeStyle = ink; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(214,206,186,.5)'; ctx.lineWidth = 1.6;   // rim catching light
+      ctx.beginPath(); ctx.arc(x, y, 11.6, Math.PI * 0.95, Math.PI * 1.75); ctx.stroke();
+      ctx.fillStyle = iron;                                // iron straps on the rim
+      for (let i = 0; i < 4; i++) {
+        const a = i * TAU / 4 + Math.PI / 4;
+        ctx.beginPath();
+        const ux = Math.cos(a), uy = Math.sin(a), px2 = -uy, py2 = ux;
+        const p = (d, o) => [x + ux * d + px2 * o, y + uy * d + py2 * o];
+        const q = [p(10.4, -1.8), p(10.4, 1.8), p(13.8, 2.2), p(13.8, -2.2)];
+        ctx.moveTo(q[0][0], q[0][1]);
+        for (let k = 1; k < 4; k++) ctx.lineTo(q[k][0], q[k][1]);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = iron;                                // diamond boss, facing the stair
+      const bd = 11.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y + bd - 3.4); ctx.lineTo(x + 3.4, y + bd);
+      ctx.lineTo(x, y + bd + 3.4); ctx.lineTo(x - 3.4, y + bd);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(190,180,160,.5)'; ctx.lineWidth = 1; ctx.stroke();
+      disc(9.5, '#1a1008');                                // the mouth
+
+      // --- the flame itself ---
+      // A wobbling edge rather than tongues: at this size a few long licks just
+      // make a three-pointed star, but an unsteady rim reads as fire.
+      const blaze = (rBase, wob, fill) => {
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        for (let i = 0; i <= 22; i++) {
+          const a = i / 22 * TAU;
+          const rr = rBase + pulse * 0.9
+            + Math.sin(a * 3 + b.anim * 4.1) * wob
+            + Math.sin(a * 5 - b.anim * 6.7) * wob * 0.6;
+          const fx = x + Math.cos(a) * rr, fy = y + Math.sin(a) * rr;
+          if (i) ctx.lineTo(fx, fy); else ctx.moveTo(fx, fy);
+        }
+        ctx.closePath(); ctx.fill();
+      };
+      blaze(8.4, 1.1, 'rgba(226,70,22,' + (0.6 + pulse * 0.3) + ')');
+      blaze(6.2, 0.9, 'rgba(255,146,32,' + (0.72 + pulse * 0.28) + ')');
+      blaze(4.0, 0.7, 'rgba(255,190,70,' + (0.85 + pulse * 0.15) + ')');
+      ctx.fillStyle = 'rgba(255,245,196,' + (0.82 + pulse * 0.18) + ')';
+      ctx.beginPath(); ctx.arc(x, y, 2.3 + pulse * 0.8, 0, TAU); ctx.fill();
       break;
     }
+
     case 'tower': {
       ctx.fillStyle = '#7a7060';
       ctx.fillRect(x0 + 8, y0 + 12, w - 16, h - 12);

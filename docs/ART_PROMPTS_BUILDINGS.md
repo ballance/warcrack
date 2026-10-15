@@ -180,24 +180,43 @@ together as one faction's engineering.
 
 ---
 
-# 4. Altar of Embers — "Briar Shrine"
+# 4. Altar of Embers — "Briar Shrine"  ✅ done
 
-3×3, 96 × 96 px. Summons and revives the hero. Should feel like the most
-*important* building on the field, not just another shed.
+3×3, 96 × 96 px. Summons and revives the hero.
 
-> Top-down orthographic view of a fantasy shrine: a raised circular stone dais
-> reached by low steps, four carved standing stones around the rim, a wide
-> fire-bowl at the centre burning with orange flame, scorch marks on the stone,
-> carved runes. Solemn, ancient, ceremonial.
+**Reference received and implemented.** Taken: three stepped circular tiers; a
+stair cut into the near side between rune-carved balustrades; five tapered
+standing stones around the rim carrying lozenge and bar glyphs; team-coloured
+banners swagged between them; and a masonry fire bowl on a plinth with iron
+straps and a diamond boss, burning at the centre.
 
-Current palette: stone `#6f6554` / `#847a66`, flame `#ffb24a`. Team colour: a
-cloth or banner between the standing stones.
+**The most useful thing in the reference was that it is round.** Every other
+building on the map is a square under a pitched roof, so a circle is doing more
+for "this one matters" than any amount of detail could. It also needed the one
+shared-code change in this batch: the drop shadow under every building is a
+rectangle, which pokes out at the corners of a round one, so the Altar gets an
+ellipse.
 
-**What I most need:** this already pulses a glow and I like it. What I want from
-the reference is the *architecture* around the flame — steps, stones, proportions
-— so the glow sits in something built rather than floating on a disc.
+**Answer to the open question — architecture around the flame rather than a glow
+on a disc:** the bowl is only a sixth of the footprint and it still dominates,
+because it is the one bright thing in a lot of grey stone. Sizing the fire to
+the *bowl* instead of to the building is what made the architecture read.
 
----
+**Three things the render caught.** Radial block joints on the drum turned the
+fire bowl into a cog — a plain ring with a lit rim arc reads far better. Three
+long flame tongues made a three-pointed star; an unsteady wobbling rim reads as
+fire where licks do not. And the standing stones, drawn long and radial, read as
+spokes pointing at the centre — seen from above a monolith is a block, so they
+are now shorter along the radius and wider across it.
+
+Banners ended up ringing four of the five gaps rather than the reference's one
+swag plus pennants. The pennants read as darts floating off the rim at this
+size, and the Altar is the building you hunt for when your hero dies, so more
+team colour on it is worth the departure.
+
+Current palette: stone `#bcb09b` platform / `#aa9f88` mid tier / `#9a8f79`
+lower / `#564e42` risers, bowl `#6e665a` with `#33302b` iron, flame
+`rgba(226,70,22)` → `rgba(255,245,196)` core. Team colour: the banner swags.
 
 # 5. Guard Tower — "Spike Nest"
 
@@ -280,9 +299,10 @@ Same three questions as the character doc, per building:
 
 # Suggested order
 
-Three left: **Workshop**, **Altar of Embers** and **Guard Tower**. The Altar has
-the most upside — it should feel like the most important building you own and
-currently reads as a shed with a fire on it.
+Two left: **Workshop** and **Guard Tower**. The Workshop should tie to the Siege
+Cart, which came out well — same rope skeins, iron brackets and planked timber.
+The Guard Tower is the last 2×2 and the only one whose whole job is to be
+recognised instantly at a distance.
 
 # How these get reviewed now
 
