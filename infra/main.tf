@@ -294,12 +294,34 @@ data "aws_iam_policy_document" "gha_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Branch-scoped would be tighter still, but workflow_dispatch from any ref
-    # needs to work, so this stays at repo scope like the other services.
+    # Do NOT match on `sub` here. GitHub has begun minting subjects with the
+    # numeric owner and repo ids baked in; the token this repo actually
+    # presents reads
+    #
+    #   repo:ballance@126194/warcrack@1415013792:environment:production
+    #
+    # not the documented repo:ballance/warcrack:environment:production, so a
+    # "repo:<owner>/<name>:*" pattern silently matches nothing and every deploy
+    # fails with a bare "Not authorized to perform sts:AssumeRoleWithWebIdentity"
+    # even though the audience, the provider and the role arn are all correct.
+    #
+    # `job_workflow_ref` is still issued in its plain documented form, and IAM
+    # accepts it as the required scoping claim (it insists on a non-wildcard
+    # condition on either `sub` or `job_workflow_ref`). Pinning it also makes
+    # this tighter than the old repo-wide scope: only the deploy workflow can
+    # assume the role, from any ref so workflow_dispatch still works. Rename
+    # that file and this must change with it.
     condition {
       test     = "StringLike"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      variable = "token.actions.githubusercontent.com:job_workflow_ref"
+      values   = ["${var.github_repo}/.github/workflows/deploy.yml@*"]
+    }
+
+    # Belt and braces, and unaffected by the subject format change.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:repository"
+      values   = [var.github_repo]
     }
   }
 }
