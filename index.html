@@ -89,6 +89,11 @@ canvas{display:block}
 #cheatBar label{color:#f0d9a0;font-size:12px;margin-right:6px}
 #cheatBar input{width:235px;background:#15120f;border:1px solid #5a4a33;color:#f0e4c4;
   padding:3px 6px;border-radius:3px;font-family:inherit;font-size:12px}
+#spectate{position:absolute;left:50%;transform:translateX(-50%);top:42px;display:none;z-index:25;
+  background:rgba(12,10,8,.92);border:1px solid #8a6f3e;border-radius:4px;padding:4px 12px;
+  font-size:12px;color:#f0d9a0;letter-spacing:1px;white-space:nowrap}
+#spectate.show{display:block}
+#spectate b{color:#ffd98a}
 #msgs{position:absolute;left:10px;top:44px;font-size:13px;z-index:20;text-shadow:0 1px 3px #000}
 #msgs div{margin-bottom:3px;color:#ffd9a0;animation:fade 7s forwards}
 @keyframes fade{0%{opacity:1}75%{opacity:1}100%{opacity:0}}
@@ -173,6 +178,7 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   </div>
 
   <div id="msgs"></div>
+  <div id="spectate"></div>
 
   <div id="cheatBar"><label for="cheatIn">cheat</label><input type="text" id="cheatIn" autocomplete="off" spellcheck="false"></div>
 
@@ -219,6 +225,7 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
     </div>
     <div class="row" style="justify-content:center;margin-top:18px">
       <button class="bigbtn" id="btnStart">Begin the Claim</button>
+      <button class="mbtn" id="btnWatch">Watch AI vs AI</button>
       <button class="mbtn" id="btnHelp">How to Play</button>
     </div>
     <p class="hint" style="margin-top:14px">Tip: fresh Laborers walk to the nearest gold seam on their own &mdash; right-click the black pines to put some on lumber.</p>
@@ -332,7 +339,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · selfplay';
+const BUILD = '2026-10-15 · spectate';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -1037,6 +1044,7 @@ function visibleAt(p, wx, wy) {
   return p.fog.vis[ty * M + tx] === 1;
 }
 function canPlayerSee(e) {
+  if (G.godMode) return true;
   const p = G.players[0];
   if (e.owner === 0) return true;
   if (G.revealed[e.owner]) return true;
@@ -3351,12 +3359,13 @@ function render(alpha) {
   const t0x = Math.max(0, (cam.x / TILE | 0) - 1), t0y = Math.max(0, (cam.y / TILE | 0) - 1);
   const t1x = Math.min(M - 1, ((cam.x + vw) / TILE | 0) + 1), t1y = Math.min(M - 1, ((cam.y + vh) / TILE | 0) + 2);
   const fog = G.players[0].fog;
+  const god = G.godMode;
 
   /* ---- terrain ---- */
   for (let ty = t0y; ty <= t1y; ty++) {
     for (let tx = t0x; tx <= t1x; tx++) {
       const i = ty * M + tx, t = G.terr[i];
-      if (!fog.explored[i]) continue;
+      if (!fog.explored[i] && !god) continue;
       ctx.fillStyle = terrTint(t, G.shade[i], tx, ty);
       ctx.fillRect(tx * TILE, ty * TILE, TILE, TILE);
     }
@@ -3366,7 +3375,7 @@ function render(alpha) {
   for (let ty = t0y; ty <= t1y; ty++) {
     for (let tx = t0x; tx <= t1x; tx++) {
       const i = ty * M + tx;
-      if (!fog.explored[i]) continue;
+      if (!fog.explored[i] && !god) continue;
       if (G.terr[i] === T_WATER) {
         const ph = Math.sin(G.time * 1.6 + tx * 0.7 + ty * 0.5);
         ctx.fillStyle = 'rgba(150,200,255,' + (0.05 + 0.05 * (ph * 0.5 + 0.5)) + ')';
@@ -3379,7 +3388,7 @@ function render(alpha) {
   for (let ty = t0y; ty <= t1y; ty++) {
     for (let tx = t0x; tx <= t1x; tx++) {
       const i = ty * M + tx;
-      if (!fog.explored[i]) continue;
+      if (!fog.explored[i] && !god) continue;
       const t = G.terr[i];
       if (t === T_CLIFF) ctx.drawImage(SPR.cliff, tx * TILE, ty * TILE);
       else if (t === T_ROCK) ctx.drawImage(SPR.rock, tx * TILE, ty * TILE);
@@ -3507,15 +3516,17 @@ function render(alpha) {
   }
 
   /* ---- fog of war ---- */
-  const data = fogImg.data;
-  for (let i = 0; i < M * M; i++) {
-    const a = fog.explored[i] ? (fog.vis[i] ? 0 : 150) : 255;
-    data[i * 4 + 3] = a;
+  if (!god) {
+    const data = fogImg.data;
+    for (let i = 0; i < M * M; i++) {
+      const a = fog.explored[i] ? (fog.vis[i] ? 0 : 150) : 255;
+      data[i * 4 + 3] = a;
+    }
+    fogCtx.putImageData(fogImg, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(fogCv, 0, 0, M, M, 0, 0, WORLD, WORLD);
+    ctx.imageSmoothingEnabled = false;
   }
-  fogCtx.putImageData(fogImg, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(fogCv, 0, 0, M, M, 0, 0, WORLD, WORLD);
-  ctx.imageSmoothingEnabled = false;
 
   /* ---- revealed (but unseen) enemies drawn over the fog ---- */
   for (let i = 0; i < LATE.length; i++) {
@@ -6377,8 +6388,8 @@ function drawMinimap() {
   const fog = G.players[0].fog;
   for (let i = 0; i < M * M; i++) {
     const o = i * 4;
-    if (!fog.explored[i]) { dst[o] = 6; dst[o + 1] = 7; dst[o + 2] = 10; dst[o + 3] = 255; continue; }
-    const dim = fog.vis[i] ? 1 : 0.5;
+    if (!fog.explored[i] && !G.godMode) { dst[o] = 6; dst[o + 1] = 7; dst[o + 2] = 10; dst[o + 3] = 255; continue; }
+    const dim = (G.godMode || fog.vis[i]) ? 1 : 0.5;
     dst[o] = src[o] * dim; dst[o + 1] = src[o + 1] * dim; dst[o + 2] = src[o + 2] * dim; dst[o + 3] = 255;
   }
   mmCtx.putImageData(mmWork, 0, 0);
@@ -6449,6 +6460,7 @@ const EL = {
   endSub: document.getElementById('endSub'),
   endStats: document.getElementById('endStats'),
   seedIn: document.getElementById('seedIn'),
+  spectate: document.getElementById('spectate'),
   cheatBar: document.getElementById('cheatBar'),
   cheatIn: document.getElementById('cheatIn')
 };
@@ -6461,6 +6473,16 @@ function addMsg(text, important) {
   EL.msgs.appendChild(d);
   while (EL.msgs.childNodes.length > 6) EL.msgs.removeChild(EL.msgs.firstChild);
   setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 7000);
+}
+
+function refreshSpectate() {
+  if (!EL.spectate) return;
+  if (!G || !G.selfPlay) { EL.spectate.classList.remove('show'); return; }
+  EL.spectate.classList.add('show');
+  EL.spectate.innerHTML =
+    'SPECTATING &nbsp;<b>' + FACTIONS[0].name + '</b> vs <b>' + FACTIONS[1].name + '</b>' +
+    ' &nbsp;&bull;&nbsp; speed <b>' + (G.speed || 1) + '&times;</b> <span style="opacity:.7">[ / ]</span>' +
+    ' &nbsp;&bull;&nbsp; vision <b>' + (G.godMode ? 'ALL' : 'Accord only') + '</b> <span style="opacity:.7">(V)</span>';
 }
 
 function refreshTop() {
@@ -6925,6 +6947,28 @@ function rankSel(e) {
    your army around. The keydown handler already ignores everything while an
    <input> has focus, so the bar suppresses hotkeys for free. */
 const CHEATS = {
+  reveal: {
+    desc: 'The fog draws back.',
+    run() {
+      G.godMode = !G.godMode;
+      refreshSpectate();
+      return G.godMode ? 'The whole valley lies open.' : 'The fog returns.';
+    }
+  },
+  spectate: {
+    desc: 'Hand your banner to a commander and watch.',
+    run() {
+      if (G.ais[0]) return 'You are already watching.';
+      G.selfPlay = true;
+      G.ais[0] = makeAI(G.players[0]);
+      G.ais[0].init();
+      G.godMode = true;
+      G.sel = [];
+      afterSelect();
+      refreshSpectate();
+      return 'The Accord takes its own counsel. You are an observer now.';
+    }
+  },
   holdtheline: {
     desc: 'A Footman reports for duty.',
     run() {
@@ -7224,6 +7268,19 @@ window.addEventListener('keydown', (ev) => {
   if (key === 'F10') { ev.preventDefault(); openHelp(); return; }
   if (!G || G.state !== 'play') return;
   if (key === 'Enter') { ev.preventDefault(); openCheatBar(); return; }
+  // V toggles the reveal, but only while spectating — in a normal game V is
+  // Shield Wall and the fourth inventory slot.
+  if (G.selfPlay && (key === 'v' || key === 'V')) { ev.preventDefault(); runCheat('reveal'); return; }
+  if (key === '[' || key === ']') {
+    ev.preventDefault();
+    const steps = [1, 2, 4, 8];
+    let i = steps.indexOf(G.speed || 1);
+    if (i < 0) i = 0;
+    G.speed = steps[clamp(i + (key === ']' ? 1 : -1), 0, steps.length - 1)];
+    refreshSpectate();
+    addMsg('Speed ' + G.speed + '\u00d7');
+    return;
+  }
 
   // control groups
   if (/^[1-9]$/.test(key)) {
@@ -7343,7 +7400,12 @@ function startGame(seedText, diffKey, opts) {
     badTrees: new Map(),
     ai: null, ais: null, over: null, endT: 0,
     selfPlay: !!(opts && opts.selfPlay),
-    swapBases: !!(opts && opts.swapBases)
+    swapBases: !!(opts && opts.swapBases),
+    // God mode is a RENDERING reveal only. It must never write to the fog
+    // arrays: those are what the AI reasons from, and filling them would hand
+    // whichever side you are watching free vision over its opponent.
+    godMode: !!(opts && opts.godMode),
+    speed: 1
   };
   G.players[2].name = 'Wilds';
   input.placing = null; input.targetMode = null; input.castKey = null;
@@ -7560,6 +7622,9 @@ function helpHTML() {
     '<b>Camera</b><span>Arrow keys, WASD, screen-edge scroll, mouse wheel to zoom, or click/drag the minimap. ' +
     'WASD is ignored when that letter is a command on the current card — the arrow keys always pan.</span>' +
     '<b>Esc</b><span>Cancel placement/targeting, then open the menu. <b>F10</b> shows this page.</span>' +
+    '<b>Watch AI vs AI</b><span>On the title screen. Both sides play themselves with the whole map revealed. ' +
+    'While spectating: <b>[</b> and <b>]</b> change simulation speed, <b>V</b> toggles full vision. ' +
+    'The reveal is for your screen only &mdash; neither commander can see through it.</span>' +
     '</div>';
   h += '<h3>Economy</h3><div class="kgrid">' +
     '<b>Gold</b><span>Laborers carry ' + CONFIG.goldPerTrip + ' per trip; at most ' + CONFIG.mineSlots + ' may work one seam.</span>' +
@@ -7623,6 +7688,11 @@ document.getElementById('btnStart').addEventListener('click', () => {
   if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
   startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff);
 });
+document.getElementById('btnWatch').addEventListener('click', () => {
+  sfxInit();
+  if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff, { selfPlay: true, godMode: true });
+});
 document.getElementById('btnHelp').addEventListener('click', openHelp);
 document.getElementById('btnHelp2').addEventListener('click', openHelp);
 document.getElementById('btnHelp3').addEventListener('click', openHelp);
@@ -7669,10 +7739,11 @@ function frameBody(now) {
   const dt = dtms / 1000;
   if (G && G.state !== 'title') {
     if (G.state === 'play') {
-      acc += dt;
+      acc += dt * (G.speed || 1);
       let guard = 0;
-      while (acc >= DT && guard < 8) { simTick(); acc -= DT; guard++; }
-      if (acc > DT * 8) acc = 0;
+      const cap = 8 * (G.speed || 1);
+      while (acc >= DT && guard < cap) { simTick(); acc -= DT; guard++; }
+      if (acc > DT * cap) acc = 0;
       updateCamera(dt);
     }
     tickCorpses(G.state === 'play' ? dt : 0);
@@ -7683,6 +7754,7 @@ function frameBody(now) {
       refreshTop();
       refreshInfo();
       buildCard();
+      refreshSpectate();
     }
     mmAcc += dt;
     if (mmAcc > 0.06) { mmAcc = 0; drawMinimap(); }
