@@ -348,8 +348,16 @@ data "aws_iam_policy_document" "gha_deploy" {
   }
 
   statement {
-    sid       = "InvalidateDistribution"
-    actions   = ["cloudfront:CreateInvalidation"]
+    sid = "InvalidateDistribution"
+    actions = [
+      "cloudfront:CreateInvalidation",
+      # The deploy waits for the invalidation to finish rather than declaring
+      # success the moment it is queued, and `aws cloudfront wait
+      # invalidation-completed` polls GetInvalidation to do it. Without this the
+      # upload lands, the invalidation is created, and the job then fails on the
+      # wait — which looks like a broken deploy but has in fact already shipped.
+      "cloudfront:GetInvalidation",
+    ]
     resources = [aws_cloudfront_distribution.site.arn]
   }
 
