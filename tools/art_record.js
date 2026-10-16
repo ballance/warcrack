@@ -158,7 +158,8 @@ const a = html.indexOf('<script>') + 8, b = html.lastIndexOf('</script>');
 const world = document.getElementById('world');
 world.width = 1600; world.height = 900;
 eval(html.slice(a, b) + `
-;globalThis.__draw = { drawBuildingShape, spawnBuilding, startGame, BUILDINGS, TILE, getG: () => G };
+;globalThis.__draw = { drawBuildingShape, drawUnit, drawBust, spawnBuilding, spawnUnit,
+  startGame, BUILDINGS, UNITS, TILE, getG: () => G };
 `);
 const D = globalThis.__draw;
 const type = process.argv[2] || 'smith';
@@ -166,11 +167,28 @@ const owner = parseInt(process.argv[3] || '0', 10);
 const anim = parseFloat(process.argv[4] || '0.4');
 
 D.startGame('ART', 'normal');
-const bd = D.spawnBuilding(type, owner, 30, 30, true);
-bd.anim = anim; bd.built = true; bd.hp = bd.maxHp; bd.hitFlash = 0;
-bd.queue = []; bd.upKind = null; bd.reviveTotal = 0;
-const W = bd.tw * D.TILE, Hh = bd.th * D.TILE;
-ops.length = 0;
-D.drawBuildingShape(bd, W / 2 + 20, Hh / 2 + 20);
+let W, Hh;
+if (D.UNITS[type]) {
+  // a unit, drawn at 4x so the few pixels of trim that separate the races are
+  // actually visible; `bust` draws the command-panel portrait instead
+  const u = D.spawnUnit(type === 'bust' ? 'footman' : type, owner, 1200, 1200);
+  u.anim = anim; u.facing = -Math.PI / 2; u.hp = u.maxHp;
+  W = 120; Hh = 120;
+  ops.length = 0;
+  D.drawUnit(u, W / 2 + 20, Hh / 2 + 20);
+} else if (type.slice(0, 5) === 'bust:') {
+  const u = D.spawnUnit(type.slice(5), owner, 1200, 1200);
+  u.anim = anim; u.hp = u.maxHp;
+  W = 76; Hh = 76;
+  ops.length = 0;
+  D.drawBust(u);
+} else {
+  const bd = D.spawnBuilding(type, owner, 30, 30, true);
+  bd.anim = anim; bd.built = true; bd.hp = bd.maxHp; bd.hitFlash = 0;
+  bd.queue = []; bd.upKind = null; bd.reviveTotal = 0;
+  W = bd.tw * D.TILE; Hh = bd.th * D.TILE;
+  ops.length = 0;
+  D.drawBuildingShape(bd, W / 2 + 20, Hh / 2 + 20);
+}
 fs.writeFileSync(process.argv[5] || (type + '.json'), JSON.stringify({ w: W + 40, h: Hh + 40, ops }));
 console.log('recorded ' + ops.length + ' ops for ' + type);

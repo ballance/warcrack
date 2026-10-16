@@ -216,11 +216,13 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
 <div class="screen show" id="scTitle">
   <div class="sheet" style="text-align:center">
     <h1 class="title">EMBERFALL</h1>
-    <p class="sub">THE EMBER ACCORD &nbsp;&bull;&nbsp; THE THORNKIN &nbsp;&bull;&nbsp; THE BRAMBLE HOST &nbsp;&bull;&nbsp; THE ASHEN COIL</p>
+    <p class="sub">THE EMBER ACCORD &nbsp;&bull;&nbsp; THE THORNKIN &nbsp;&bull;&nbsp; THE FEN COVENANT &nbsp;&bull;&nbsp; THE GLOAM CHOIR</p>
     <p class="lore" style="max-width:640px;margin:0 auto 14px">
       The Accord's wagons reached the Hollowwood at the first frost and raised a hall of ember-brick before dark.
-      Three rival claims woke with them, one in each far corner, and none of them keeps faith with the others.
-      Claim the seams of gold, fell the black pines, and raise your Warden &mdash; only one banner will stand over the valley.
+      Three older claims woke with them. The Thornkin came up through the roots; the Fen Covenant rose out of the
+      wet ground on turf and drystone; the Gloam Choir were simply there by morning, and their glass was already lit.
+      None of the four keeps faith with the others. Claim the seams of gold, fell the black pines, and raise your
+      Warden &mdash; only one banner will stand over the valley.
     </p>
     <div class="row" style="justify-content:center">
       <label class="lb">Difficulty</label>
@@ -362,7 +364,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-16 · fourway';
+const BUILD = '2026-10-16 · fourclaims';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -381,35 +383,35 @@ const DMG_TYPES = ['normal', 'pierce', 'siege', 'magic', 'hero'];
 /* --- units --------------------------------------------------------------------------- */
 const UNITS = {
   laborer: {
-    name: 'Laborer', altName: 'Grubber', gold: 75, lumber: 0, food: 1,
+    name: 'Laborer', alt: { thorn: 'Grubber', fen: 'Peatcutter', gloam: 'Gleaner' }, gold: 75, lumber: 0, food: 1,
     hp: 220, dmg: 6, dmgType: 'normal', armor: 0, armorType: 'medium',
     range: 0.35, speed: 80, atkSpeed: 1.6, sight: 7, buildTime: 14, radius: 9,
     worker: true, hotkey: 'L', xp: 25,
     desc: 'Gathers gold and lumber, raises and repairs buildings. Fights poorly.'
   },
   footman: {
-    name: 'Footman', altName: 'Thorn Brute', gold: 135, lumber: 0, food: 2,
+    name: 'Footman', alt: { thorn: 'Thorn Brute', fen: 'Fen Reaver', gloam: 'Shardward' }, gold: 135, lumber: 0, food: 2,
     hp: 420, dmg: 12, dmgType: 'normal', armor: 2, armorType: 'heavy',
     range: 0.45, speed: 86, atkSpeed: 1.35, sight: 8, buildTime: 20, radius: 10,
     hotkey: 'F', xp: 60, melee: true,
     desc: 'Frontline infantry with heavy armour. Ability: Shield Wall.'
   },
   archer: {
-    name: 'Archer', altName: 'Needler', gold: 130, lumber: 10, food: 2,
+    name: 'Archer', alt: { thorn: 'Needler', fen: 'Reedshot', gloam: 'Keener' }, gold: 130, lumber: 10, food: 2,
     hp: 310, dmg: 16, dmgType: 'pierce', armor: 0, armorType: 'light',
     range: 5, speed: 90, atkSpeed: 1.45, sight: 9, buildTime: 20, radius: 9,
     hotkey: 'R', xp: 60, projectile: 'arrow',
     desc: 'Ranged attacker. Pierce damage shreds light armour.'
   },
   siege: {
-    name: 'Siege Cart', altName: 'Bramble Hurler', gold: 220, lumber: 50, food: 4,
+    name: 'Siege Cart', alt: { thorn: 'Bramble Hurler', fen: 'Fenhurler', gloam: 'Knell Engine' }, gold: 220, lumber: 50, food: 4,
     hp: 600, dmg: 15, dmgBuilding: 55, dmgType: 'siege', armor: 1, armorType: 'medium',
     range: 7, speed: 58, atkSpeed: 2.6, sight: 9, buildTime: 32, radius: 13,
     hotkey: 'C', xp: 100, projectile: 'rock', splash: 1.1,
     desc: 'Slow artillery. Siege damage ruins fortified walls.'
   },
   hero: {
-    name: 'The Warden', altName: 'The Briarmother', gold: 0, lumber: 0, food: 5,
+    name: 'The Warden', alt: { thorn: 'The Briarmother', fen: 'The Mirecaller', gloam: 'The Hollow Cantor' }, gold: 0, lumber: 0, food: 5,
     hp: 650, dmg: 24, dmgType: 'hero', armor: 3, armorType: 'heavy',
     range: 0.5, speed: 94, atkSpeed: 1.25, sight: 9, buildTime: 0, radius: 11,
     isHero: true, mana: 240, melee: true, xp: 0,
@@ -446,50 +448,50 @@ const UNITS = {
 /* --- buildings ----------------------------------------------------------------------- */
 const BUILDINGS = {
   hall: {
-    name: 'Town Hall', altName: 'Rootmound', gold: 385, lumber: 185, time: 120,
+    name: 'Town Hall', alt: { thorn: 'Rootmound', fen: 'Fenmoot', gloam: 'Gloamvault' }, gold: 385, lumber: 185, time: 120,
     hp: 1500, tw: 4, th: 4, sight: 10, armor: 5, armorType: 'fortified',
     food: CONFIG.hallFood, hotkey: 'T', trains: ['laborer'], dropoff: true, icon: '⌂',
     desc: 'Heart of the settlement. Trains Laborers, accepts gold and lumber, grants 10 Food.'
   },
   keep: {
-    name: 'Keep', altName: 'Great Rootmound', gold: 320, lumber: 160, time: 70,
+    name: 'Keep', alt: { thorn: 'Great Rootmound', fen: 'Great Fenmoot', gloam: 'Great Gloamvault' }, gold: 320, lumber: 160, time: 70,
     hp: 2000, tw: 4, th: 4, sight: 11, armor: 6, armorType: 'fortified',
     food: CONFIG.hallFood, hotkey: 'K', trains: ['laborer'], dropoff: true, upgradeOnly: true, icon: '⌂',
     desc: 'An improved Town Hall. Unlocks tier two: Workshop and advanced forging.'
   },
   farm: {
-    name: 'Farm', altName: 'Bramble Warren', gold: 80, lumber: 20, time: 35,
+    name: 'Farm', alt: { thorn: 'Bramble Warren', fen: 'Reed Croft', gloam: 'Pale Croft' }, gold: 80, lumber: 20, time: 35,
     hp: 500, tw: 2, th: 2, sight: 6, armor: 5, armorType: 'fortified',
     food: CONFIG.farmFood, hotkey: 'F', icon: '☘',
     desc: 'Grants +6 Food. Build these ahead of your supply cap.'
   },
   barracks: {
-    name: 'Barracks', altName: 'Howling Pen', gold: 160, lumber: 60, time: 60,
+    name: 'Barracks', alt: { thorn: 'Howling Pen', fen: 'Sedge Lodge', gloam: 'Chant Hall' }, gold: 160, lumber: 60, time: 60,
     hp: 1100, tw: 3, th: 3, sight: 8, armor: 5, armorType: 'fortified',
     hotkey: 'B', trains: ['footman', 'archer'], icon: '⚔',
     desc: 'Trains Footmen and Archers.'
   },
   workshop: {
-    name: 'Workshop', altName: 'Thornworks', gold: 140, lumber: 140, time: 60,
+    name: 'Workshop', alt: { thorn: 'Thornworks', fen: 'Peatworks', gloam: 'Glassworks' }, gold: 140, lumber: 140, time: 60,
     hp: 1000, tw: 3, th: 3, sight: 8, armor: 5, armorType: 'fortified',
     hotkey: 'W', trains: ['siege'], req: 'keep', icon: '⚙',
     desc: 'Requires a Keep. Builds Siege Carts.'
   },
   altar: {
-    name: 'Altar of Embers', altName: 'Briar Shrine', gold: 180, lumber: 50, time: 60,
+    name: 'Altar of Embers', alt: { thorn: 'Briar Shrine', fen: 'Antler Cairn', gloam: 'Choirstone' }, gold: 180, lumber: 50, time: 60,
     hp: 900, tw: 3, th: 3, sight: 8, armor: 5, armorType: 'fortified',
     hotkey: 'A', hero: true, icon: '★',
     desc: 'Summons your hero, and revives them for gold when they fall.'
   },
   tower: {
-    name: 'Guard Tower', altName: 'Spike Nest', gold: 110, lumber: 80, time: 50,
+    name: 'Guard Tower', alt: { thorn: 'Spike Nest', fen: 'Mirewatch', gloam: 'Shard Spire' }, gold: 110, lumber: 80, time: 50,
     hp: 700, tw: 2, th: 2, sight: 9, armor: 4, armorType: 'fortified',
     hotkey: 'G', icon: '⚑',
     attack: { dmg: 22, dmgType: 'pierce', range: 7, atkSpeed: 1.3, projectile: 'arrow' },
     desc: 'Static ranged defence. Pierce damage, 7 tile range.'
   },
   smith: {
-    name: 'Blacksmith', altName: 'Bonefitter', gold: 140, lumber: 60, time: 50,
+    name: 'Blacksmith', alt: { thorn: 'Bonefitter', fen: 'Peatforge', gloam: 'Glassforge' }, gold: 140, lumber: 60, time: 50,
     hp: 900, tw: 3, th: 3, sight: 8, armor: 5, armorType: 'fortified',
     hotkey: 'S', icon: '⚒',
     desc: 'Researches two levels each of melee attack, ranged attack and armour.'
@@ -551,21 +553,56 @@ const ITEMS = {
 };
 
 /* --- players / factions -------------------------------------------------------------- */
-/* Four playable seats and the wilds. `thorn` picks the bramble-and-bone art and
-   the alternate building names: the Accord is the only seat that builds in
-   squared timber, so every AI seat gets the thorn treatment in its own colour.
-   Colours have to separate from each other, from the wilds' gold, and from
-   grass — hence blue / red / green / violet. */
+/* Four playable seats and the wilds.
+ *
+ * `style` is what makes a seat a race rather than a palette swap: it picks the
+ * materials every building is made of and the detailing on every unit, and it
+ * selects that seat's own name for all thirteen units and buildings. The four
+ * are told apart by what they BUILD FROM, because at map scale material reads
+ * long before shape does:
+ *
+ *   accord  squared timber, shingle, ember-brick   tan     ordered, settled
+ *   thorn   thorn, bone and horn over dark wood    red     wild, grown
+ *   fen     living turf over drystone, antler      green   low, sunken, old
+ *   gloam   obsidian and cold light, no timber     violet  sharp, lit, silent
+ *
+ * Colours separate from each other, from the wilds' gold, and from grass. The
+ * Fen are the risky one — green on a green map — so their turf runs darker and
+ * bluer than the ground and their team colour is a brighter lime than anything
+ * growing. */
 const FACTIONS = [
-  { name: 'The Ember Accord', color: '#5aa9ff', dark: '#1b3f70', light: '#bcdcff', hero: 'The Warden',      thorn: false },
-  { name: 'The Thornkin',     color: '#e05a4a', dark: '#5e1f16', light: '#ffc3b4', hero: 'The Briarmother', thorn: true },
-  { name: 'The Bramble Host', color: '#8ad24a', dark: '#2d4a12', light: '#d8f0a4', hero: 'The Thistlewake', thorn: true },
-  { name: 'The Ashen Coil',   color: '#c77ae0', dark: '#45185a', light: '#eec9f7', hero: 'The Emberbinder', thorn: true },
-  { name: 'Wilds',            color: '#c9a44a', dark: '#4a3a16', light: '#f0dca8', hero: '',                thorn: false }
+  { name: 'The Ember Accord', color: '#5aa9ff', dark: '#1b3f70', light: '#bcdcff', hero: 'The Warden',        style: 'accord' },
+  { name: 'The Thornkin',     color: '#e05a4a', dark: '#5e1f16', light: '#ffc3b4', hero: 'The Briarmother',   style: 'thorn' },
+  { name: 'The Fen Covenant', color: '#8ad24a', dark: '#2d4a12', light: '#d8f0a4', hero: 'The Mirecaller',    style: 'fen' },
+  { name: 'The Gloam Choir',  color: '#c77ae0', dark: '#45185a', light: '#eec9f7', hero: 'The Hollow Cantor', style: 'gloam' },
+  { name: 'Wilds',            color: '#c9a44a', dark: '#4a3a16', light: '#f0dca8', hero: '',                  style: 'wild' }
 ];
 const NEUTRAL = 4;              // owner id of creeps, mines and ground items
 const MAX_PLAYERS = 4;
-function isThorn(owner) { const f = FACTIONS[owner]; return !!(f && f.thorn); }
+function fstyle(owner) { const f = FACTIONS[owner]; return (f && f.style) || 'accord'; }
+function isThorn(owner) { return fstyle(owner) === 'thorn'; }
+/* A def carries its Accord name in `name` and the other three in `alt`. */
+function defName(d, owner) {
+  const a = d && d.alt;
+  return (a && a[fstyle(owner)]) || d.name;
+}
+
+/* What a soldier is fitted out in. A unit is about twenty pixels tall, so this
+   is only ever a few pixels of cloth and a glint of trim — but it is the same
+   few pixels on every unit of a race, and that is enough to tell four armies
+   apart in a melee once the team colour is lost in the scrum. */
+const UMAT = {
+  accord: { cloth: '#8a7560', leather: '#74553a', trim: '#e8c45a', trimMid: '#d4a83c', trimDark: '#a67c22',
+            beard: '#9a8a72', beardDark: '#6f6252', cap: '#8a6a3e', capMid: '#6b5130', capDark: '#4e3a22' },
+  thorn:  { cloth: '#6b6258', leather: '#564633', trim: '#c9e08a', trimMid: '#a8bf6a', trimDark: '#7a8f48',
+            beard: '#6f675a', beardDark: '#4e4840', cap: '#6b5a3a', capMid: '#54462c', capDark: '#4e3a22' },
+  fen:    { cloth: '#6e7a5c', leather: '#4e5a3e', trim: '#ded6bc', trimMid: '#b2aa8e', trimDark: '#847d66',
+            beard: '#8a9078', beardDark: '#5e6450', cap: '#5c6a46', capMid: '#44502f', capDark: '#2f3a1f' },
+  gloam:  { cloth: '#4a4360', leather: '#332c47', trim: '#bfe4ff', trimMid: '#8fb8d8', trimDark: '#5a7a9c',
+            beard: '#8f88a8', beardDark: '#5e5878', cap: '#3a3150', capMid: '#2a2439', capDark: '#1b1726' }
+};
+UMAT.wild = UMAT.accord;
+function umat(owner) { return UMAT[fstyle(owner)] || UMAT.accord; }
 /* Which corner each seat starts in, by player count. Two players take opposite
    corners rather than adjacent ones; three cannot be made symmetric on a
    four-fold map, and one seat will always have two neighbours. */
@@ -1113,11 +1150,11 @@ const TMP1 = { x: 0, y: 0 }, TMP2 = { x: 0, y: 0 };
 
 function unitDisplayName(e) {
   const d = e.def;
-  return (isThorn(e.owner) && d.altName) ? d.altName : d.name;
+  return defName(d, e.owner);
 }
 function buildingDisplayName(b) {
   const d = b.def;
-  return (isThorn(b.owner) && d.altName) ? d.altName : d.name;
+  return defName(d, b.owner);
 }
 
 function spawnUnit(type, owner, x, y) {
@@ -3846,7 +3883,8 @@ function drawTorso(x, y, w, h, col, lite, dark) {
 function drawUnit(e, x, y) {
   const f = FACTIONS[e.owner];
   const col = f.color, dark = f.dark, lite = f.light;
-  const thorn = isThorn(e.owner);
+  const sty = fstyle(e.owner), UM = umat(e.owner);
+  const thorn = sty === 'thorn';
   const r = e.radius;
   const bob = e.moving ? Math.abs(Math.sin(e.anim * 6)) * 1.1 : 0;
   const yy = y - bob;
@@ -3954,11 +3992,11 @@ function drawUnit(e, x, y) {
       const headX = x + fx * r * 0.16, headY = yy - r * 0.7 + fy * r * 0.16;
       ctx.fillStyle = skin;
       ctx.beginPath(); ctx.arc(headX, headY, r * 0.34, 0, 6.3); ctx.fill();
-      ctx.fillStyle = thorn ? '#6b6258' : '#8a7560';
+      ctx.fillStyle = UM.cloth;
       ctx.beginPath();
       ctx.ellipse(headX + fx * r * 0.08, headY + r * 0.14 + fy * r * 0.08, r * 0.28, r * 0.2, 0, 0, Math.PI);
       ctx.fill();
-      ctx.fillStyle = thorn ? '#564633' : '#74553a';
+      ctx.fillStyle = UM.leather;
       ctx.beginPath(); ctx.arc(headX, headY - r * 0.1, r * 0.35, Math.PI, 0); ctx.fill();
       ctx.beginPath();
       ctx.ellipse(headX + fx * r * 0.16, headY - r * 0.07 + fy * r * 0.16, r * 0.38, r * 0.14, 0, 0, 6.3);
@@ -4068,12 +4106,32 @@ function drawUnit(e, x, y) {
       ctx.fillRect(headX + fx * r * 0.05 - r * 0.05, headY - r * 0.04, r * 0.1, r * 0.26);
       ctx.fillStyle = steelMid;                        // plume finial
       ctx.fillRect(headX - r * 0.07, headY - r * 0.52, r * 0.14, r * 0.14);
-      if (thorn) {                                     // Thornkin take horns over a crest
+      // What is fixed to the helmet names the race at a glance in a melee.
+      if (sty === 'thorn') {                           // horns over a crest
         ctx.strokeStyle = lite; ctx.lineWidth = r * 0.1;
         ctx.beginPath();
         ctx.moveTo(headX - r * 0.3, headY - r * 0.3); ctx.lineTo(headX - r * 0.56, headY - r * 0.78);
         ctx.moveTo(headX + r * 0.3, headY - r * 0.3); ctx.lineTo(headX + r * 0.56, headY - r * 0.78);
         ctx.stroke();
+      } else if (sty === 'fen') {                      // antler prongs, forked
+        ctx.strokeStyle = UM.trim; ctx.lineWidth = r * 0.08;
+        ctx.beginPath();
+        ctx.moveTo(headX - r * 0.26, headY - r * 0.3); ctx.lineTo(headX - r * 0.5, headY - r * 0.74);
+        ctx.moveTo(headX - r * 0.4, headY - r * 0.56); ctx.lineTo(headX - r * 0.62, headY - r * 0.58);
+        ctx.moveTo(headX + r * 0.26, headY - r * 0.3); ctx.lineTo(headX + r * 0.5, headY - r * 0.74);
+        ctx.moveTo(headX + r * 0.4, headY - r * 0.56); ctx.lineTo(headX + r * 0.62, headY - r * 0.58);
+        ctx.stroke();
+      } else if (sty === 'gloam') {                    // one upright shard, lit
+        ctx.fillStyle = '#1b1726';
+        ctx.beginPath();
+        ctx.moveTo(headX, headY - r * 0.92); ctx.lineTo(headX + r * 0.14, headY - r * 0.3);
+        ctx.lineTo(headX - r * 0.14, headY - r * 0.3);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = UM.trim;
+        ctx.beginPath();
+        ctx.moveTo(headX, headY - r * 0.92); ctx.lineTo(headX + r * 0.06, headY - r * 0.42);
+        ctx.lineTo(headX - r * 0.03, headY - r * 0.4);
+        ctx.closePath(); ctx.fill();
       }
       if (e.shieldWall) {
         ctx.strokeStyle = 'rgba(236,232,196,.7)'; ctx.lineWidth = 1.6;
@@ -4330,9 +4388,7 @@ function drawUnit(e, x, y) {
       // Found in a crowd by gold and by the sweep of the cape, not by being
       // taller — the collision radius stays 11 so nothing about the sim moves.
       const steel = flash ? '#ffe9e0' : '#d8dde6', steelMid = flash ? '#ffd9d0' : '#b4bcc8', steelDark = '#7d8696';
-      const gold = thorn ? '#c9e08a' : '#e8c45a';
-      const goldMid = thorn ? '#a8bf6a' : '#d4a83c';
-      const goldDark = thorn ? '#7a8f48' : '#a67c22';
+      const gold = UM.trim, goldMid = UM.trimMid, goldDark = UM.trimDark;
       const hair = '#b8b4ae', hairDark = '#8a8680';
       const ink = 'rgba(20,16,12,.85)';
 
@@ -4909,7 +4965,8 @@ function drawUnit(e, x, y) {
 function drawBust(e) {
   const f = FACTIONS[e.owner];
   const col = f.color, dark = f.dark, lite = f.light;
-  const thorn = isThorn(e.owner);
+  const sty = fstyle(e.owner), UM = umat(e.owner);
+  const thorn = sty === 'thorn';
   const W = 76, H = 76, cx = 38;
   const skin = '#e0b78c', skinShade = '#b98c63';
 
@@ -4951,8 +5008,8 @@ function drawBust(e) {
     case 'laborer': {
       const olive = '#8f8a4e', oliveLite = '#a69f61', oliveDark = '#5f5b33';
       const hide = '#6e5133', hideLite = '#87633f', hideDark = '#46321f';
-      const beard = thorn ? '#6f675a' : '#9a8a72', beardDark = thorn ? '#4e4840' : '#6f6252';
-      const capLit = thorn ? '#6b5a3a' : '#8a6a3e', capMid = thorn ? '#54462c' : '#6b5130', capDark = '#4e3a22';
+      const beard = UM.beard, beardDark = UM.beardDark;
+      const capLit = UM.cap, capMid = UM.capMid, capDark = UM.capDark;
       const ink = '#1d1711';
       const line = (w) => { ctx.strokeStyle = ink; ctx.lineWidth = w; ctx.stroke(); };
 
@@ -5180,12 +5237,29 @@ function drawBust(e) {
       ctx.beginPath();
       ctx.moveTo(cx - 5, 10); ctx.lineTo(cx + 5, 10); ctx.lineTo(cx + 4, 2); ctx.lineTo(cx - 4, 2);
       ctx.closePath(); ctx.fill(); line(2);
-      if (thorn) {
+      if (sty === 'thorn') {                            // horns
         ctx.strokeStyle = lite; ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(cx - 17, 18); ctx.lineTo(cx - 32, 2);
         ctx.moveTo(cx + 17, 18); ctx.lineTo(cx + 32, 2);
         ctx.stroke();
+      } else if (sty === 'fen') {                       // forked antler
+        ctx.strokeStyle = UM.trim; ctx.lineWidth = 3.4;
+        ctx.beginPath();
+        ctx.moveTo(cx - 16, 18); ctx.lineTo(cx - 30, 0);
+        ctx.moveTo(cx - 24, 9); ctx.lineTo(cx - 37, 7);
+        ctx.moveTo(cx + 16, 18); ctx.lineTo(cx + 30, 0);
+        ctx.moveTo(cx + 24, 9); ctx.lineTo(cx + 37, 7);
+        ctx.stroke();
+      } else if (sty === 'gloam') {                     // a shard through the crest
+        ctx.fillStyle = '#1b1726';
+        ctx.beginPath();
+        ctx.moveTo(cx, -12); ctx.lineTo(cx + 7, 16); ctx.lineTo(cx - 7, 16);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = UM.trim;
+        ctx.beginPath();
+        ctx.moveTo(cx, -12); ctx.lineTo(cx + 3, 12); ctx.lineTo(cx - 1, 12);
+        ctx.closePath(); ctx.fill();
       }
       break;
     }
@@ -5272,8 +5346,8 @@ function drawBust(e) {
       ctx.beginPath(); ctx.ellipse(cx + 6, 50, 4, 6, 0, 0, 6.3); ctx.fill();
       ctx.strokeStyle = '#8a6a52'; ctx.lineWidth = 1.8; // mouth
       ctx.beginPath(); ctx.moveTo(cx - 4, 55); ctx.lineTo(cx + 4, 55); ctx.stroke();
-      if (thorn) {                                      // Thornkin: bone pins through the peak
-        ctx.strokeStyle = '#d8d2bc'; ctx.lineWidth = 3;
+      if (sty !== 'accord' && sty !== 'wild') {          // a pin through the peak:
+        ctx.strokeStyle = UM.trim; ctx.lineWidth = 3;     // bone, antler or glass
         ctx.beginPath();
         ctx.moveTo(cx - 12, 30); ctx.lineTo(cx + 12, 22);
         ctx.stroke();
@@ -5372,9 +5446,7 @@ function drawBust(e) {
     }
     case 'hero': {
       const steel = '#d8dde6', steelMid = '#b4bcc8', steelDark = '#7d8696';
-      const gold = thorn ? '#c9e08a' : '#e8c45a';
-      const goldMid = thorn ? '#a8bf6a' : '#d4a83c';
-      const goldDark = thorn ? '#7a8f48' : '#a67c22';
+      const gold = UM.trim, goldMid = UM.trimMid, goldDark = UM.trimDark;
       const hair = '#b8b4ae', hairDark = '#8a8680', ink = '#1d1711';
       const line = (w) => { ctx.strokeStyle = ink; ctx.lineWidth = w; ctx.stroke(); };
 
@@ -5786,6 +5858,73 @@ function drawBust(e) {
 }
 
 /* ---------- buildings ---------- */
+/* ---------- faction materials ----------
+   What a building is made OF is what you read at map scale, well before you
+   read its shape, so each race gets its own material set rather than a tinted
+   copy of the Accord's. Every building pulls framing, roof, masonry and accent
+   from here, which is also why damage flash lives in one place now instead of
+   a `flash ? a : b` ternary in each of eight cases.
+
+   The Fen are the awkward one: a green faction on a green map. Their turf runs
+   darker and bluer than the ground so the roof still separates from the field
+   it sits in, and their bright lime team colour does the identifying. */
+function hexMix(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((pa >> sh) & 255) + ((((pb >> sh) & 255) - ((pa >> sh) & 255)) * t));
+  return 'rgb(' + ch(16) + ',' + ch(8) + ',' + ch(0) + ')';
+}
+const MATS = {
+  // squared timber, shingle and pale masonry — built, ordered, maintained
+  accord: { beam: '#b08a4e', beamMid: '#8a6a3a', beamDark: '#6b5130', corner: '#c9a05c',
+            roof: '#43362a', roofLit: '#6b5844', thatch: '#b08e49', thatchLit: '#ddc07c',
+            stone: '#b0a898', stoneMid: '#8c8478', stoneDark: '#6e675c',
+            floor: '#9a9184', deck: '#7a5c3c', deckDark: '#5e4329', accent: '#e8c45a' },
+  // dark red heartwood under thorn, with bone where the Accord puts timber
+  // blocks — the corner pieces are the quickest way to tell these two apart at
+  // map scale, since both are still fundamentally wooden buildings
+  thorn:  { beam: '#6e4a2c', beamMid: '#523520', beamDark: '#372215', corner: '#ded7bd',
+            roof: '#2e2520', roofLit: '#4a3a2e', thatch: '#8a6c35', thatchLit: '#b2935a',
+            stone: '#9d9a8c', stoneMid: '#807d70', stoneDark: '#5f5c52',
+            floor: '#7e7466', deck: '#523520', deckDark: '#372215', accent: '#ded7bd',
+            crop: '#4f9838', cropLit: '#78c457', soil: '#5e4329', soilDark: '#4a3420' },
+  // living turf over drystone — low, sunken and very old. The turf runs darker
+  // and bluer than the map's grass so a Fen roof still separates from the field
+  // it stands in, which is the whole risk of a green faction on a green map.
+  fen:    { beam: '#8f9185', beamMid: '#73766b', beamDark: '#565a51', corner: '#a7a99c',
+            roof: '#355a30', roofLit: '#4a7a3e', thatch: '#6f7f42', thatchLit: '#93a357',
+            stone: '#9a9c90', stoneMid: '#7b7e72', stoneDark: '#5a5d53',
+            floor: '#8b8d80', deck: '#6f7458', deckDark: '#545a42', accent: '#ded6bc',
+            crop: '#3f7a34', cropLit: '#5e9c46', soil: '#4a4030', soilDark: '#3a3124' },
+  // obsidian and cold light, no timber anywhere — sharp, lit, silent. Even the
+  // crops are pale: nothing green grows in a Pale Croft.
+  gloam:  { beam: '#3a3150', beamMid: '#2a2439', beamDark: '#1b1726', corner: '#6a5a8c',
+            roof: '#262033', roofLit: '#3e3556', thatch: '#332b45', thatchLit: '#4f4470',
+            stone: '#463f5c', stoneMid: '#352f47', stoneDark: '#241f31',
+            floor: '#3b3450', deck: '#2f2942', deckDark: '#201b2d', accent: '#bfe4ff',
+            crop: '#6f7a9e', cropLit: '#aab6d4', soil: '#2b2639', soilDark: '#201c2c' }
+};
+MATS.accord.crop = '#4f9838'; MATS.accord.cropLit = '#78c457';
+MATS.accord.soil = '#6b4f33'; MATS.accord.soilDark = '#55402a';
+// The Town Hall's roof and the Keep's curtain wall are big enough to be read
+// from across the map on their own, so they get their own entries rather than
+// reusing the shed roof.
+MATS.accord.civic = '#8a5338'; MATS.accord.civicLit = '#9c6446'; MATS.accord.civicDark = '#6b3f2a';
+MATS.thorn.civic  = '#412f22'; MATS.thorn.civicLit  = '#573e2d'; MATS.thorn.civicDark  = '#2b1e17';
+MATS.fen.civic    = '#355a30'; MATS.fen.civicLit    = '#4a7a3e'; MATS.fen.civicDark    = '#27421f';
+MATS.gloam.civic  = '#262033'; MATS.gloam.civicLit  = '#3e3556'; MATS.gloam.civicDark  = '#191423';
+MATS.accord.wallLo = '#453e34'; MATS.accord.wallMid = '#7b7260'; MATS.accord.wallHi = '#a99d86';
+MATS.thorn.wallLo  = '#3a352c'; MATS.thorn.wallMid  = '#6b6454'; MATS.thorn.wallHi  = '#948a74';
+MATS.fen.wallLo    = '#454a40'; MATS.fen.wallMid    = '#767c6c'; MATS.fen.wallHi    = '#a0a694';
+MATS.gloam.wallLo  = '#2a2437'; MATS.gloam.wallMid  = '#4c4466'; MATS.gloam.wallHi  = '#7a6c9e';
+MATS.wild = MATS.accord;
+function matsFor(owner, flash) {
+  const m = MATS[fstyle(owner)] || MATS.accord;
+  if (!flash) return m;
+  const out = {};
+  for (const k in m) out[k] = hexMix(m[k], '#ffd9d0', 0.55);
+  return out;
+}
+
 function drawBuildingShape(b, x, y) {
   const f = FACTIONS[b.owner];
   const w = b.tw * TILE, h = b.th * TILE;
@@ -5837,12 +5976,12 @@ function drawBuildingShape(b, x, y) {
       // asymmetric — a steep thatched longhouse with the chimney at one end, and
       // a fenced plot alongside — so a row of farms reads as several buildings
       // rather than one blob, which the first version did not.
-      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
-      const thatch = flash ? '#e0b8a8' : '#b08e49';
-      const thatchLit = flash ? '#f0d0c0' : '#ddc07c';
-      const soil = '#6b4f33', soilDark = '#55402a';
-      const leaf = '#4f9838', leafLit = '#78c457';
-      const stone = '#8c8478';
+      const MT = matsFor(b.owner, flash);
+      const beam = MT.beam, beamMid = MT.beamMid, beamDark = MT.beamDark, corner = MT.corner;
+      const thatch = MT.thatch, thatchLit = MT.thatchLit;
+      const soil = MT.soil, soilDark = MT.soilDark;
+      const leaf = MT.crop, leafLit = MT.cropLit;
+      const stone = MT.stoneMid;
       const ink = 'rgba(18,14,10,.95)';
       const bx0 = x0 + 3, bx1 = x0 + w - 3, by0 = y0 + 3, by1 = y0 + h - 3;
       const splitX = x0 + w * 0.56;
@@ -5965,10 +6104,10 @@ function drawBuildingShape(b, x, y) {
       // Footprint splits into a timber-framed hall under a shingled gable and an
       // open training yard. The team colour rides the roof ridge, which is the
       // only part of a building you really see from straight above.
-      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
-      const shingle = flash ? '#8a6a60' : '#4a3b30';
-      const shingleLit = flash ? '#9a7a70' : '#5a4a3c';
-      const yard = '#c9a878', yardLine = '#b09060';
+      const MT = matsFor(b.owner, flash);
+      const beam = MT.beam, beamMid = MT.beamMid, beamDark = MT.beamDark, corner = MT.corner;
+      const shingle = MT.roof, shingleLit = MT.roofLit;
+      const yard = MT.floor, yardLine = MT.stoneDark;
       const ink = 'rgba(18,14,10,.95)';
       const splitX = x0 + w * 0.62;
 
@@ -6091,14 +6230,14 @@ function drawBuildingShape(b, x, y) {
       // the same rope skeins, steel brackets, rope-wound winch drum and planked
       // timber -- so the two read as one faction's engineering rather than two
       // unrelated props.
-      const wLite = flash ? '#ffd9d0' : '#b8894a', wMid = flash ? '#ffc9bc' : '#9a7038';
-      const wDark = '#6b4e28', wDeep = '#4e3a22';
+      const MT = matsFor(b.owner, flash);
+      const wLite = MT.beam, wMid = MT.beamMid;
+      const wDark = MT.beamDark, wDeep = MT.deckDark;
       const steel = '#8a8a8a', steelLite = '#a8a8a8', steelDark = '#5c5c5c';
       const rope = '#d9c08a', ropeDark = '#b89a62';
       const brass = '#c9a44e', brassLite = '#e3c070';
-      const shingle = flash ? '#7a5e52' : '#44372c';
-      const shingleLit = flash ? '#8c6e60' : '#5c4b3a';
-      const stone = '#9a9186', stoneDark = '#6e675c';
+      const shingle = MT.roof, shingleLit = MT.roofLit;
+      const stone = MT.stone, stoneDark = MT.stoneDark;
       const ink = 'rgba(20,16,12,.9)';
       const bx0 = x0 + 4, by0 = y0 + 4, bx1 = x0 + w - 4, by1 = y0 + h - 4;
       const rx1 = x0 + w * 0.54, ry1 = y0 + h * 0.5;      // the roofed corner
@@ -6289,11 +6428,9 @@ function drawBuildingShape(b, x, y) {
       // sized to the bowl rather than to the footprint. The bowl is small — a
       // sixth of the width — and it still dominates, because it is the only
       // bright thing inside a lot of grey stone.
-      const lit = flash ? '#f0ddd2' : '#bcb09b';
-      const mid = flash ? '#dcc0b2' : '#9a8f79';
-      const step = flash ? '#e6cec1' : '#aa9f88';
-      const shade = flash ? '#9c7f72' : '#564e42';
-      const bowlStone = flash ? '#a88a7c' : '#6e665a';
+      const MT = matsFor(b.owner, flash);
+      const lit = MT.stone, mid = MT.stoneMid, step = hexMix(MT.stone, MT.stoneMid, 0.45);
+      const shade = MT.stoneDark, bowlStone = MT.beamMid;
       const iron = '#33302b';
       const ink = 'rgba(18,14,10,.95)';
       const rune = 'rgba(52,46,36,.75)';
@@ -6494,11 +6631,10 @@ function drawBuildingShape(b, x, y) {
       // inside. Open top, not a roof: a planked deck ring around a dark hatch
       // with a ladder in it. A roof would have made it a hut, and the hole is
       // what says there are people up there shooting at you.
-      const lit = flash ? '#f2dcd2' : '#b5aa98';
-      const mid = flash ? '#dcbcae' : '#8d8273';
-      const dark = flash ? '#b08e80' : '#6b6356';
-      const deep = '#49433a';
-      const plank = '#7a5c3c', plankDark = '#5e4329';
+      const MT = matsFor(b.owner, flash);
+      const lit = MT.stone, mid = MT.stoneMid, dark = MT.stoneDark;
+      const deep = hexMix(MT.stoneDark, '#000000', 0.3);
+      const plank = MT.deck, plankDark = MT.deckDark;
       const ink = 'rgba(18,14,10,.95)';
       const o0 = x0 + 5, o1 = x0 + w - 5;                 // tower outer edge
       const i0 = x0 + 13, i1 = x0 + w - 13;               // inside of the parapet
@@ -6609,11 +6745,11 @@ function drawBuildingShape(b, x, y) {
       // the room to act like one: a lit chimney mouth, a burning coal bed below
       // it, and a warm wash across the bay. The wash is clipped to the bay on
       // purpose; thrown over the whole footprint it just turns the roof muddy.
-      const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
-      const shingle = flash ? '#7a5e52' : '#43362a';
-      const shingleLit = flash ? '#9a7a6a' : '#6b5844';
-      const stone = '#b0a898', stoneMid = '#8c8478', stoneDark = '#6e675c';
-      const floor = '#9a9184', floorWarm = '#b4906a';
+      const MT = matsFor(b.owner, flash);
+      const beam = MT.beam, beamMid = MT.beamMid, beamDark = MT.beamDark, corner = MT.corner;
+      const shingle = MT.roof, shingleLit = MT.roofLit;
+      const stone = MT.stone, stoneMid = MT.stoneMid, stoneDark = MT.stoneDark;
+      const floor = MT.floor, floorWarm = '#b4906a';
       const ink = 'rgba(18,14,10,.95)';
       const gl = 0.5 + 0.5 * Math.sin(b.anim * 3.1);        // forge pulse
       const splitY = y0 + h * 0.45;
@@ -6865,8 +7001,9 @@ function rr(x, y, w, h, r) {
 }
 
 /* A drum tower seen from a little above: shaft, battlement rim, conical roof.
-   The Thornkin get thorn spikes where the Accord gets a finial. */
-function drawTurret(tx, ty, r, roofH, f, spiky, lo, mid, hi) {
+   What sits on the point names the builder: an Accord finial, Thornkin spikes,
+   Fen antler prongs, a Gloam shard. */
+function drawTurret(tx, ty, r, roofH, f, style, lo, mid, hi) {
   const shaftTop = ty - r * 0.35, shaftBot = ty + r * 1.45;
   ctx.fillStyle = 'rgba(0,0,0,.28)';
   ctx.beginPath(); ctx.ellipse(tx + 2, shaftBot, r * 1.05, r * 0.42, 0, 0, 6.3); ctx.fill();
@@ -6896,12 +7033,30 @@ function drawTurret(tx, ty, r, roofH, f, spiky, lo, mid, hi) {
   ctx.beginPath();
   ctx.moveTo(tx, tip); ctx.lineTo(tx - r - 2, shaftTop - 1); ctx.lineTo(tx - r * 0.15, shaftTop - 1);
   ctx.closePath(); ctx.fill();
-  if (spiky) {
+  if (style === 'thorn') {
     ctx.strokeStyle = f.light; ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.moveTo(tx, tip); ctx.lineTo(tx - 4, tip - 6);
     ctx.moveTo(tx, tip); ctx.lineTo(tx + 5, tip - 4);
     ctx.stroke();
+  } else if (style === 'fen') {
+    ctx.strokeStyle = '#ded6bc'; ctx.lineWidth = 1.5;      // antler prongs
+    ctx.beginPath();
+    ctx.moveTo(tx - 1, tip + 1); ctx.lineTo(tx - 4, tip - 5); ctx.lineTo(tx - 7, tip - 7);
+    ctx.moveTo(tx - 4, tip - 5); ctx.lineTo(tx - 2, tip - 9);
+    ctx.moveTo(tx + 1, tip + 1); ctx.lineTo(tx + 4, tip - 5); ctx.lineTo(tx + 7, tip - 7);
+    ctx.moveTo(tx + 4, tip - 5); ctx.lineTo(tx + 2, tip - 9);
+    ctx.stroke();
+  } else if (style === 'gloam') {
+    ctx.fillStyle = '#1b1726';                              // a shard of cold glass
+    ctx.beginPath();
+    ctx.moveTo(tx, tip - 9); ctx.lineTo(tx + 3.2, tip + 1);
+    ctx.lineTo(tx, tip + 3); ctx.lineTo(tx - 3.2, tip + 1);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(191,228,255,.85)';
+    ctx.beginPath();
+    ctx.moveTo(tx, tip - 9); ctx.lineTo(tx + 1.4, tip - 1); ctx.lineTo(tx - 0.6, tip);
+    ctx.closePath(); ctx.fill();
   } else {
     ctx.fillStyle = '#f2d27a';
     ctx.beginPath(); ctx.arc(tx, tip - 1.5, 2.1, 0, 6.3); ctx.fill();
@@ -6915,12 +7070,11 @@ function drawTurret(tx, ty, r, roofH, f, spiky, lo, mid, hi) {
    ridge beam with the Barracks so one faction reads as one builder. */
 function drawTownHall(b, x, y, w, h, f, flash) {
   const x0 = x - w / 2, y0 = y - h / 2;
-  const beam = '#b08a4e', beamMid = '#8a6a3a', beamDark = '#6b5130', corner = '#c9a05c';
-  const roof = flash ? '#c08a78' : '#8a5338';
-  const roofLit = flash ? '#d49c88' : '#9c6446';
-  const roofDark = '#6b3f2a';
-  const stone = '#b8b0a2', stoneDark = '#8c8478';
-  const yard = '#c9a878', yardLine = '#b09060';
+  const MT = matsFor(b.owner, flash);
+  const beam = MT.beam, beamMid = MT.beamMid, beamDark = MT.beamDark, corner = MT.corner;
+  const roof = MT.civic, roofLit = MT.civicLit, roofDark = MT.civicDark;
+  const stone = MT.stone, stoneDark = MT.stoneMid;
+  const yard = MT.floor, yardLine = MT.stoneDark;
   const ink = 'rgba(18,14,10,.95)';
   const splitX = x0 + w * 0.68;
 
@@ -7065,9 +7219,8 @@ function drawTownHall(b, x, y, w, h, f, flash) {
 function drawCastle(b, x, y, w, h, f, flash) {
   const keep = true;   // the Keep is the only caller now — the Town Hall is civic
   const x0 = x - w / 2, y0 = y - h / 2;
-  const lo = flash ? '#e8bdb2' : '#453e34';
-  const mid = flash ? '#ffded5' : '#7b7260';
-  const hi = flash ? '#fff6f2' : '#a99d86';
+  const MT = matsFor(b.owner, flash);
+  const lo = MT.wallLo, mid = MT.wallMid, hi = MT.wallHi;
 
   // ---------- curtain wall ----------
   const wx = x0 + 9, wy = y0 + h * 0.36, ww = w - 18, wh = h - (wy - y0) - 7;
@@ -7141,7 +7294,7 @@ function drawCastle(b, x, y, w, h, f, flash) {
 
   // ---------- towers ----------
   const tr = keep ? 11 : 10, rh = keep ? 20 : 16;
-  const spiky = isThorn(b.owner);
+  const spiky = fstyle(b.owner);
   drawTurret(wx + 3, wy + wh * 0.52, tr, rh, f, spiky, lo, mid, hi);
   drawTurret(wx + ww - 3, wy + wh * 0.52, tr, rh, f, spiky, lo, mid, hi);
   if (keep) {
@@ -7623,7 +7776,7 @@ function buildCard() {
       const req = buildingRequirementsMet(p, t);
       const aff = canAfford(p, d.gold, d.lumber);
       CARD.push(ent(d.icon, d.name, d.hotkey,
-        '<b>' + ((isThorn(e.owner) && d.altName) ? d.altName : d.name) + '</b>' + costLine(d.gold, d.lumber, 0, d.time) +
+        '<b>' + defName(d, e.owner) + '</b>' + costLine(d.gold, d.lumber, 0, d.time) +
         (!req ? '<div class="warn">Requires a Keep</div>' : '') +
         (!aff ? '<div class="warn">Not enough resources</div>' : '') +
         '<div>' + d.desc + '</div>',
@@ -7666,7 +7819,7 @@ function buildCard() {
     if (b.def.trains) {
       for (const t of b.def.trains) {
         const d = UNITS[t];
-        const nm = (isThorn(b.owner) && d.altName) ? d.altName : d.name;
+        const nm = defName(d, b.owner);
         const aff = canAfford(p, d.gold, d.lumber);
         const food = p.foodUsed + p.foodQueued + d.food <= p.foodCap;
         CARD.push(ent(glyphForType(t), nm, d.hotkey,
@@ -8594,8 +8747,24 @@ function dmgTableHTML() {
 function helpHTML() {
   let h = '<h1 class="title" style="font-size:28px">HOW TO PLAY</h1>';
   h += '<p class="lore">You lead <b>The Ember Accord</b> in a free-for-all against up to three rival claims &mdash; ' +
-    'and they fight each other as readily as they fight you. Gather gold and lumber, raise a settlement, ' +
+    'and they fight each other as readily as they fight you. Every claim fields the same soldiers and raises the ' +
+    'same buildings; what differs is what they build them <i>from</i>, and what they call them. ' +
+    'Gather gold and lumber, raise a settlement, ' +
     'level your hero on the wild camps, and raze every enemy building.</p>';
+  // The four claims, built from the faction table so this page can never drift
+  // out of step with what the game actually draws.
+  h += '<h3>The Four Claims</h3><div class="kgrid">';
+  const CLAIMS = [
+    ['squared timber, shingle and ember-brick', 'Settlers. They build straight, and they build to last.'],
+    ['thorn, bone and horn over dark heartwood', 'They came up through the roots and never agreed to leave.'],
+    ['living turf over drystone, trimmed in antler', 'Low, sunken halls in the wet ground. Older than the road.'],
+    ['obsidian and cold light, and no timber at all', 'Nobody saw them arrive. By morning the glass was lit.']
+  ];
+  for (let i = 0; i < CLAIMS.length; i++) {
+    h += '<b style="color:' + FACTIONS[i].color + '">' + FACTIONS[i].name + '</b>' +
+      '<span>' + CLAIMS[i][1] + ' Builds in ' + CLAIMS[i][0] + '. Hero: <b>' + FACTIONS[i].hero + '</b>.</span>';
+  }
+  h += '</div>';
   h += '<h3>Controls</h3><div class="kgrid">' +
     '<b>Left-click</b><span>Select. Drag a box to select many. Shift-click adds or removes. Double-click selects every unit of that type on screen.</span>' +
     '<b>Right-click</b><span>Smart command: move, attack, gather, repair, assist build, follow. On a building you own it sets its rally point.</span>' +

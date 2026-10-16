@@ -69,6 +69,40 @@ quality when missed:
 - **Don't name an existing game.** It collapses the result toward that style and
   you stop getting anything specific to Emberfall.
 
+## The four claims
+
+Every building is drawn once and built four times, from four material sets. The
+material is what you read at map scale — long before shape — so this is what
+separates the races, not the colour:
+
+| | Primary | Builds from | Corner blocks |
+| --- | --- | --- | --- |
+| **The Ember Accord** (player) | `#5aa9ff` | squared timber, shingle, ember-brick | tan timber |
+| **The Thornkin** | `#e05a4a` | dark red heartwood, thorn, horn | **bone** |
+| **The Fen Covenant** | `#8ad24a` | living turf over drystone, antler trim | pale drystone |
+| **The Gloam Choir** | `#c77ae0` | obsidian and cold light, no timber at all | violet glass |
+
+It all comes out of `MATS` in the source, which every building case pulls its
+framing, roof, masonry and accent from. Adding a building means using those
+names rather than literal hex, and it is then correct in all four races for
+free. Damage flash lives there too, which is why the old `flash ? a : b`
+ternaries are gone from the individual cases.
+
+Two things the renders settled:
+
+- **Thornkin and Accord were nearly identical** when both were tan timber under
+  a dark roof. Darkening the Thornkin heartwood helped a little; swapping their
+  corner blocks to bone is what actually separated them, because the corner
+  pieces are eight small high-contrast squares on every single building.
+- **A green faction on a green map** is the Fen's whole risk. Their turf runs
+  darker and bluer than the ground so a roof still reads against the field it
+  sits in, and the bright lime team colour does the identifying.
+
+Units carry it too, in `UMAT`: cloth, leather and trim per race, plus what is
+fixed to a helmet — an Accord finial, Thornkin horns, Fen antler prongs, a
+Gloam shard. At twenty pixels that crest is what tells four armies apart once
+the team colour is lost in a melee.
+
 ## The two factions
 
 | | Primary | Dark | Light |
