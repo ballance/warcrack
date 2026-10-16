@@ -198,7 +198,7 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
   <div id="cheatBar"><label for="cheatIn">command</label><input type="text" id="cheatIn" autocomplete="off" spellcheck="false"></div>
 
   <div id="hud">
-    <div id="mmwrap" class="panel"><canvas id="minimap" width="96" height="96"></canvas></div>
+    <div id="mmwrap" class="panel"><canvas id="minimap" width="128" height="128"></canvas></div>
     <div id="center" class="panel">
       <div id="portWrap"><canvas id="portrait" width="76" height="76"></canvas><div id="portname"></div></div>
       <div id="info"></div>
@@ -216,17 +216,23 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
 <div class="screen show" id="scTitle">
   <div class="sheet" style="text-align:center">
     <h1 class="title">EMBERFALL</h1>
-    <p class="sub">THE EMBER ACCORD &nbsp;&bull;&nbsp; THE THORNKIN</p>
+    <p class="sub">THE EMBER ACCORD &nbsp;&bull;&nbsp; THE THORNKIN &nbsp;&bull;&nbsp; THE BRAMBLE HOST &nbsp;&bull;&nbsp; THE ASHEN COIL</p>
     <p class="lore" style="max-width:640px;margin:0 auto 14px">
       The Accord's wagons reached the Hollowwood at the first frost and raised a hall of ember-brick before dark.
-      The Thornkin, who keep the old roots, have been awake ever since. Claim the seams of gold, fell the black pines,
-      and raise your Warden &mdash; only one banner will stand over the valley.
+      Three rival claims woke with them, one in each far corner, and none of them keeps faith with the others.
+      Claim the seams of gold, fell the black pines, and raise your Warden &mdash; only one banner will stand over the valley.
     </p>
     <div class="row" style="justify-content:center">
       <label class="lb">Difficulty</label>
       <button class="mbtn" data-diff="easy">Easy</button>
       <button class="mbtn sel" data-diff="normal">Normal</button>
       <button class="mbtn" data-diff="hard">Hard</button>
+    </div>
+    <div class="row" style="justify-content:center">
+      <label class="lb">Opponents</label>
+      <button class="mbtn" data-opp="1">1</button>
+      <button class="mbtn" data-opp="2">2</button>
+      <button class="mbtn sel" data-opp="3">3</button>
     </div>
     <div class="row" style="justify-content:center">
       <label class="lb">Map Seed</label>
@@ -293,12 +299,13 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
 /* ============================== 1. CONFIG & DATA TABLES ============================== */
 const CONFIG = {
   TILE: 32,
-  MAP: 96,
+  MAP: 128,
   SIM_HZ: 30,
 
   startGold: 500,
   startLumber: 200,
   startWorkers: 5,
+  defaultPlayers: 4,     // you plus three AI seats, free-for-all
 
   goldPerTrip: 10,
   lumberPerTrip: 10,
@@ -355,7 +362,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-15 · cardfit';
+const BUILD = '2026-10-16 · fourway';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -544,12 +551,25 @@ const ITEMS = {
 };
 
 /* --- players / factions -------------------------------------------------------------- */
+/* Four playable seats and the wilds. `thorn` picks the bramble-and-bone art and
+   the alternate building names: the Accord is the only seat that builds in
+   squared timber, so every AI seat gets the thorn treatment in its own colour.
+   Colours have to separate from each other, from the wilds' gold, and from
+   grass — hence blue / red / green / violet. */
 const FACTIONS = [
-  { name: 'The Ember Accord', color: '#5aa9ff', dark: '#1b3f70', light: '#bcdcff', hero: 'The Warden' },
-  { name: 'The Thornkin',     color: '#e05a4a', dark: '#5e1f16', light: '#ffc3b4', hero: 'The Briarmother' },
-  { name: 'Wilds',            color: '#c9a44a', dark: '#4a3a16', light: '#f0dca8', hero: '' }
+  { name: 'The Ember Accord', color: '#5aa9ff', dark: '#1b3f70', light: '#bcdcff', hero: 'The Warden',      thorn: false },
+  { name: 'The Thornkin',     color: '#e05a4a', dark: '#5e1f16', light: '#ffc3b4', hero: 'The Briarmother', thorn: true },
+  { name: 'The Bramble Host', color: '#8ad24a', dark: '#2d4a12', light: '#d8f0a4', hero: 'The Thistlewake', thorn: true },
+  { name: 'The Ashen Coil',   color: '#c77ae0', dark: '#45185a', light: '#eec9f7', hero: 'The Emberbinder', thorn: true },
+  { name: 'Wilds',            color: '#c9a44a', dark: '#4a3a16', light: '#f0dca8', hero: '',                thorn: false }
 ];
-const NEUTRAL = 2;
+const NEUTRAL = 4;              // owner id of creeps, mines and ground items
+const MAX_PLAYERS = 4;
+function isThorn(owner) { const f = FACTIONS[owner]; return !!(f && f.thorn); }
+/* Which corner each seat starts in, by player count. Two players take opposite
+   corners rather than adjacent ones; three cannot be made symmetric on a
+   four-fold map, and one seat will always have two neighbours. */
+const BASE_SLOTS = { 2: [0, 2], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
 
 const DIFF = {
   easy:   { label: 'Easy',   buildMul: 1.40, trainMul: 1.30, armyThresh: 12, maxWorkers: 10, micro: 0, waveGap: 100, creep: false, heroAgg: 0.5 },
@@ -597,8 +617,25 @@ let __uid = 1;
 function uid() { return __uid++; }
 
 /* ============================== 3. MAP GENERATION ============================== */
-/* 180-degree rotational symmetry about the map centre keeps the two starts fair. */
-function rot(p) { return { x: M - 1 - p.x, y: M - 1 - p.y }; }
+/* Four-fold rotational symmetry about the map centre keeps four starts fair.
+   Every feature is rolled once, inside a single quadrant, and stamped at all
+   four quarter-turns — so whatever one player has, the other three have the
+   same thing rotated. With two players this was a 180-degree mirror; a quarter
+   turn is the same idea with twice the players, and it is worth being strict
+   about because a self-play run once traced a 30/70 win-rate skew to a single
+   placement helper that drifted north-west.
+
+   Rolling inside one quadrant rather than filtering a whole-map roll matters:
+   the old half-plane tests (cx - cy < 6) threw away about half the rolls, and
+   the equivalent test for four-fold symmetry would throw away three quarters. */
+const MHALF = M / 2;                       // first tile of the far half
+function rot90(p) { return { x: M - 1 - p.y, y: p.x }; }
+function rots(p) {
+  const out = [p];
+  let q = p;
+  for (let i = 0; i < 3; i++) { q = rot90(q); out.push(q); }
+  return out;
+}
 
 function genMap(seedText) {
   const rnd = mulberry32(hashSeed(seedText));
@@ -608,22 +645,25 @@ function genMap(seedText) {
   for (let i = 0; i < M * M; i++) { terr[i] = T_GRASS; shade[i] = (rnd() * 6) | 0; }
 
   const put = (tx, ty, t) => { if (inMap(tx, ty)) terr[ti(tx, ty)] = t; };
-  // stamp a blob and its 180-degree mirror
+  // Roll once, stamp four times. The rnd() call sits outside the rotation loop
+  // on purpose: all four copies must take the same jag decision or the corners
+  // stop being identical.
   function blob(cx, cy, r, type, jag) {
     for (let y = -r - 1; y <= r + 1; y++) for (let x = -r - 1; x <= r + 1; x++) {
       const d = Math.sqrt(x * x + y * y);
       if (d <= r - 0.3 + (rnd() - 0.5) * jag) {
-        put(cx + x, cy + y, type);
-        put(M - 1 - (cx + x), M - 1 - (cy + y), type);
+        for (const q of rots({ x: cx + x, y: cy + y })) put(q.x, q.y, type);
       }
     }
   }
   function clearArea(cx, cy, r, type) {
     for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
-      if (x * x + y * y <= r * r) {
-        if (inMap(cx + x, cy + y)) { const i = ti(cx + x, cy + y); terr[i] = (type === undefined ? T_GRASS : type); treeHp[i] = 0; }
-        const mx = M - 1 - (cx + x), my = M - 1 - (cy + y);
-        if (inMap(mx, my)) { const i2 = ti(mx, my); terr[i2] = (type === undefined ? T_GRASS : type); treeHp[i2] = 0; }
+      if (x * x + y * y > r * r) continue;
+      for (const q of rots({ x: cx + x, y: cy + y })) {
+        if (!inMap(q.x, q.y)) continue;
+        const i = ti(q.x, q.y);
+        terr[i] = (type === undefined ? T_GRASS : type);
+        treeHp[i] = 0;
       }
     }
   }
@@ -635,52 +675,50 @@ function genMap(seedText) {
         const t = k / steps, cx = Math.round(lerp(a.x, b.x, t)), cy = Math.round(lerp(a.y, b.y, t));
         for (let y = -width; y <= width; y++) for (let x = -width; x <= width; x++) {
           if (x * x + y * y > width * width) continue;
-          const gx = cx + x, gy = cy + y;
-          if (inMap(gx, gy)) { const i = ti(gx, gy); if (terr[i] !== T_DIRT) { terr[i] = T_GRASS; treeHp[i] = 0; } }
-          const mx = M - 1 - gx, my = M - 1 - gy;
-          if (inMap(mx, my)) { const i2 = ti(mx, my); if (terr[i2] !== T_DIRT) { terr[i2] = T_GRASS; treeHp[i2] = 0; } }
+          for (const q of rots({ x: cx + x, y: cy + y })) {
+            if (!inMap(q.x, q.y)) continue;
+            const i = ti(q.x, q.y);
+            if (terr[i] !== T_DIRT) { terr[i] = T_GRASS; treeHp[i] = 0; }
+          }
         }
       }
     }
   }
 
   /* ---- key positions ---- */
-  const base0 = { x: 14, y: 81 };                 // player, bottom-left
-  const base1 = rot(base0);                       // AI, top-right
-  const mines = [
-    { x: base0.x + 8, y: base0.y - 1, amount: CONFIG.mineGold, owner: 0 },
-    { x: base0.x - 1,  y: base0.y - 9, amount: CONFIG.mineGold, owner: 0 },
-    { x: 28, y: 40, amount: CONFIG.expansionGold, owner: -1 }
+  // Player 0 starts bottom-left. The quarter turns run from there, so player 2
+  // is the far corner and players 1 and 3 are the near neighbours — which is
+  // what makes a free-for-all interesting: your neighbours reach you first.
+  const bases = rots({ x: 18, y: M - 19 });
+  const mineDefs = [
+    { x: bases[0].x + 9, y: bases[0].y - 1, amount: CONFIG.mineGold },
+    { x: bases[0].x - 1, y: bases[0].y - 10, amount: CONFIG.mineGold },
+    { x: 30, y: MHALF, amount: CONFIG.expansionGold }   // mid-edge, shared with a neighbour
   ];
   const allMines = [];
-  for (const m of mines) {
-    allMines.push({ x: m.x, y: m.y, amount: m.amount });
-    const r2 = rot(m); allMines.push({ x: r2.x, y: r2.y, amount: m.amount });
-  }
+  for (const m of mineDefs) for (const q of rots(m)) allMines.push({ x: q.x, y: q.y, amount: m.amount });
   const campDefs = [
-    { x: 34, y: 72, tier: 1 },
-    { x: 20, y: 36, tier: 2 }
+    { x: 42, y: M - 32, tier: 1 },                   // near each base
+    { x: 40, y: 70, tier: 2 },                       // on the way to the middle
+    { x: 54, y: 72, tier: 3 }                        // the contested centre ring
   ];
   const camps = [];
-  for (const c of campDefs) {
-    camps.push({ x: c.x, y: c.y, tier: c.tier });
-    const r2 = rot(c); camps.push({ x: r2.x, y: r2.y, tier: c.tier });
-  }
-  camps.push({ x: 47, y: 47, tier: 3 });          // contested stone golem camp, dead centre
+  for (const c of campDefs) for (const q of rots(c)) camps.push({ x: q.x, y: q.y, tier: c.tier });
 
-  /* ---- terrain features (generated in one half, mirrored) ---- */
+  /* ---- terrain features: rolled in one quadrant, stamped four times ---- */
+  const rollQ = () => MHALF + ((rnd() * (M - MHALF - 8)) | 0);
   // lakes
-  for (let i = 0; i < 7; i++) {
-    let cx, cy, tries = 0;
+  for (let i = 0; i < 4; i++) {
+    let cx = 0, cy = 0, tries = 0, ok = false;
     do {
-      cx = 8 + ((rnd() * 80) | 0); cy = 8 + ((rnd() * 80) | 0); tries++;
-    } while (tries < 40 && (cx - cy < 6 || dist(cx, cy, base0.x, base0.y) < 22 || dist(cx, cy, base1.x, base1.y) < 22));
-    blob(cx, cy, 3 + rnd() * 3.5, T_WATER, 2.2);
+      cx = rollQ(); cy = rollQ(); tries++;
+      ok = bases.every(b => dist(cx, cy, b.x, b.y) > 26);
+    } while (tries < 40 && !ok);
+    if (ok) blob(cx, cy, 3 + rnd() * 3.5, T_WATER, 2.2);
   }
   // cliff ridges
-  for (let i = 0; i < 9; i++) {
-    let cx = 6 + ((rnd() * 84) | 0), cy = 6 + ((rnd() * 84) | 0);
-    if (cx - cy < 4) { const t = cx; cx = cy; cy = t; }
+  for (let i = 0; i < 8; i++) {
+    const cx = rollQ(), cy = rollQ();
     const len = 4 + ((rnd() * 9) | 0), ang = rnd() * Math.PI;
     for (let k = 0; k < len; k++) {
       const px = Math.round(cx + Math.cos(ang) * k * 1.6), py = Math.round(cy + Math.sin(ang) * k * 1.6);
@@ -688,42 +726,37 @@ function genMap(seedText) {
     }
   }
   // boulders
-  for (let i = 0; i < 12; i++) {
-    const cx = 5 + ((rnd() * 86) | 0), cy = 5 + ((rnd() * 86) | 0);
-    if (cx - cy < 2) continue;
-    blob(cx, cy, 1 + rnd(), T_ROCK, 0.8);
-  }
-  // forests: rings around each base plus scattered groves
+  for (let i = 0; i < 5; i++) blob(rollQ(), rollQ(), 1 + rnd(), T_ROCK, 0.8);
+  // forests: a ring around each base, a grove on each expansion, then groves
   function forestRing(c, r0, r1, density) {
     for (let y = -r1; y <= r1; y++) for (let x = -r1; x <= r1; x++) {
       const d = Math.sqrt(x * x + y * y);
       if (d < r0 || d > r1) continue;
       if (rnd() > density) continue;
-      const gx = c.x + x, gy = c.y + y;
-      if (inMap(gx, gy) && terr[ti(gx, gy)] === T_GRASS) terr[ti(gx, gy)] = T_FOREST;
-      const mx = M - 1 - gx, my = M - 1 - gy;
-      if (inMap(mx, my) && terr[ti(mx, my)] === T_GRASS) terr[ti(mx, my)] = T_FOREST;
+      for (const q of rots({ x: c.x + x, y: c.y + y })) {
+        if (inMap(q.x, q.y) && terr[ti(q.x, q.y)] === T_GRASS) terr[ti(q.x, q.y)] = T_FOREST;
+      }
     }
   }
-  forestRing(base0, 8, 17, 0.72);
-  forestRing({ x: 28, y: 40 }, 5, 9, 0.5);
-  for (let i = 0; i < 34; i++) {
-    const cx = 4 + ((rnd() * 88) | 0), cy = 4 + ((rnd() * 88) | 0);
-    if (cx - cy < 0) continue;
-    blob(cx, cy, 2 + rnd() * 4, T_FOREST, 2.0);
-  }
+  forestRing(bases[0], 9, 20, 0.72);
+  forestRing({ x: 30, y: MHALF }, 5, 10, 0.5);
+  for (let i = 0; i < 15; i++) blob(rollQ(), rollQ(), 2 + rnd() * 4, T_FOREST, 2.0);
 
   /* ---- guarantee routes ---- */
-  const C = { x: 47, y: 47 };
-  carve([base0, { x: base0.x + 14, y: base0.y - 14 }, C, { x: base1.x - 14, y: base1.y + 14 }, base1], 3);
-  carve([base0, { x: 12, y: 46 }, { x: 24, y: 24 }, { x: 46, y: 12 }, base1], 2);
-  carve([base0, { x: 50, y: 84 }, { x: 72, y: 70 }, base1], 2);
+  // One spoke definition becomes four roads to the middle; one ring segment
+  // becomes the whole ring joining neighbouring bases through the expansions.
+  const C = { x: MHALF, y: MHALF };
+  carve([bases[0], { x: bases[0].x + 16, y: bases[0].y - 16 }, C], 3);
+  carve([bases[0], { x: 24, y: M - 42 }, { x: 30, y: MHALF }, { x: 24, y: 40 }, bases[1]], 2);
 
   /* ---- clearings ---- */
-  clearArea(base0.x, base0.y, 8, T_GRASS);
-  clearArea(base0.x, base0.y, 5, T_DIRT);
-  for (const m of allMines) { clearArea(m.x, m.y, 4, T_GRASS); clearArea(m.x, m.y, 2, T_DIRT); }
-  for (const c of camps) { clearArea(c.x, c.y, 4 + (c.tier === 3 ? 2 : 0), T_GRASS); clearArea(c.x, c.y, 2, T_DIRT); }
+  // Iterate the definitions, not the expanded lists: clearArea already stamps
+  // all four rotations, so walking the expanded list would clear each spot
+  // sixteen times.
+  clearArea(bases[0].x, bases[0].y, 9, T_GRASS);
+  clearArea(bases[0].x, bases[0].y, 5, T_DIRT);
+  for (const m of mineDefs) { clearArea(m.x, m.y, 4, T_GRASS); clearArea(m.x, m.y, 2, T_DIRT); }
+  for (const c of campDefs) { clearArea(c.x, c.y, 4 + (c.tier === 3 ? 2 : 0), T_GRASS); clearArea(c.x, c.y, 2, T_DIRT); }
 
   // map border cliffs
   for (let i = 0; i < M; i++) {
@@ -739,21 +772,23 @@ function genMap(seedText) {
   /* ---- connectivity repair ---- */
   const okTile = (t) => t === T_GRASS || t === T_DIRT;
   const seen = new Uint8Array(M * M);
-  const q = new Int32Array(M * M); let qh = 0, qt = 0;
-  const s0 = ti(base0.x, base0.y); q[qt++] = s0; seen[s0] = 1;
+  const q2 = new Int32Array(M * M); let qh = 0, qt = 0;
+  const s0 = ti(bases[0].x, bases[0].y); q2[qt++] = s0; seen[s0] = 1;
   while (qh < qt) {
-    const cur = q[qh++], cx = cur % M, cy = (cur / M) | 0;
+    const cur = q2[qh++], cx = cur % M, cy = (cur / M) | 0;
     for (let d = 0; d < 4; d++) {
       const nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0), ny = cy + (d === 2 ? 1 : d === 3 ? -1 : 0);
       if (!inMap(nx, ny)) continue;
       const n = ti(nx, ny);
       if (seen[n] || !okTile(terr[n])) continue;
-      seen[n] = 1; q[qt++] = n;
+      seen[n] = 1; q2[qt++] = n;
     }
   }
-  if (!seen[ti(base1.x, base1.y)]) carve([base0, C, base1], 3);
+  // One carve to the middle reconnects every corner at once, because it stamps
+  // all four rotations.
+  if (bases.some(b => !seen[ti(b.x, b.y)])) carve([bases[0], C], 3);
 
-  return { terr, treeHp, shade, base0, base1, mines: allMines, camps, seedText };
+  return { terr, treeHp, shade, bases, mines: allMines, camps, seedText };
 }
 
 /* ============================== 4. GRID & PATHFINDING ============================== */
@@ -1078,11 +1113,11 @@ const TMP1 = { x: 0, y: 0 }, TMP2 = { x: 0, y: 0 };
 
 function unitDisplayName(e) {
   const d = e.def;
-  return (e.owner === 1 && d.altName) ? d.altName : d.name;
+  return (isThorn(e.owner) && d.altName) ? d.altName : d.name;
 }
 function buildingDisplayName(b) {
   const d = b.def;
-  return (b.owner === 1 && d.altName) ? d.altName : d.name;
+  return (isThorn(b.owner) && d.altName) ? d.altName : d.name;
 }
 
 function spawnUnit(type, owner, x, y) {
@@ -1092,7 +1127,7 @@ function spawnUnit(type, owner, x, y) {
     x: x, y: y, px: x, py: y, radius: d.radius, hitR: d.radius,
     hp: d.hp, maxHp: d.hp, armor: d.armor, armorTypeName: d.armorType,
     sight: d.sight, speed: d.speed,
-    facing: owner === 1 ? Math.PI : 0, anim: Math.random() * 10,
+    facing: Math.atan2(WORLD * 0.5 - y, WORLD * 0.5 - x), anim: Math.random() * 10,
     order: null, path: null, pathI: 0, needPath: false, wantX: x, wantY: y,
     repathCd: 0, stuckT: 0, pathFail: 0, lastX: x, lastY: y, checkT: 0, moving: false,
     atkCd: 0, target: null, swing: 0, dead: false, inside: false, insideT: 0,
@@ -1390,7 +1425,7 @@ function unitSpeed(u) {
 }
 function totalArmor(e) {
   let a = e.armor + (e.buffArmor || 0);
-  if (e.owner < 2 && e.kind === 'unit') a += G.players[e.owner].upg.armor * CONFIG.upgradeArmorPerLevel;
+  if (e.owner < NEUTRAL && e.kind === 'unit') a += G.players[e.owner].upg.armor * CONFIG.upgradeArmorPerLevel;
   if (e.items) a += itemBonus(e, 'armor');
   if (e.isHero) a += Math.floor((e.level - 1) * 0.5);
   return a;
@@ -1405,11 +1440,11 @@ function attackRangeOf(u) {
 }
 function unitDamage(u, t) {
   const d = u.def;
-  if (u.kind === 'building') return d.attack.dmg + (u.owner < 2 ? G.players[u.owner].upg.ranged * CONFIG.upgradeDmgPerLevel : 0);
+  if (u.kind === 'building') return d.attack.dmg + (u.owner < NEUTRAL ? G.players[u.owner].upg.ranged * CONFIG.upgradeDmgPerLevel : 0);
   let base = d.dmg;
   if (t && t.kind === 'building' && d.dmgBuilding) base = d.dmgBuilding;
   if (u.isHero) base += (u.level - 1) * CONFIG.heroDmgPerLevel;
-  if (u.owner < 2) {
+  if (u.owner < NEUTRAL) {
     const p = G.players[u.owner];
     if (d.range > 1.5) base += p.upg.ranged * CONFIG.upgradeDmgPerLevel;
     else if (!d.isHero) base += p.upg.melee * CONFIG.upgradeDmgPerLevel;
@@ -2088,11 +2123,11 @@ function killEntity(e, killer) {
     }
     pushCorpse(e);
     sfxAt('die', e.x, e.y);
-    if (killer && killer.owner < 2) {
+    if (killer && killer.owner < NEUTRAL) {
       G.players[killer.owner].stats.kills++;
       grantXP(killer.owner, e);
     }
-    if (e.owner < 2) {
+    if (e.owner < NEUTRAL) {
       G.players[e.owner].stats.lost++;
       recomputeFood(G.players[e.owner]);
     }
@@ -2107,15 +2142,15 @@ function killEntity(e, killer) {
   } else if (e.kind === 'building') {
     pushEffect('rubble', e.x, e.y, 1.4);
     sfxAt('boom', e.x, e.y);
-    if (e.owner < 2 && e.queue && e.queue.length) {       // release food reserved by a lost queue
+    if (e.owner < NEUTRAL && e.queue && e.queue.length) {       // release food reserved by a lost queue
       const pq = G.players[e.owner];
       for (let i = 0; i < e.queue.length; i++) pq.foodQueued = Math.max(0, pq.foodQueued - UNITS[e.queue[i]].food);
       e.queue.length = 0;
     }
-    if (killer && killer.owner < 2) G.players[killer.owner].stats.razed++;
+    if (killer && killer.owner < NEUTRAL) G.players[killer.owner].stats.razed++;
     // free any builder orders
     removeEntity(e);
-    if (e.owner < 2) {
+    if (e.owner < NEUTRAL) {
       recomputeFood(G.players[e.owner]);
       if (e.owner === 0) addMsg('A building has been destroyed!', true);
     }
@@ -2191,7 +2226,7 @@ function underAttackAlert(e) {
 /* ============================== 11. HERO & ABILITIES ============================== */
 function grantXP(owner, victim) {
   const xp = victim.def.xp || 0;
-  if (!xp || owner > 1) return;
+  if (!xp || owner >= NEUTRAL) return;
   const p = G.players[owner];
   const h = p.hero;
   if (!h || h.dead) return;
@@ -2290,7 +2325,7 @@ function resolveCast(h, o) {
 function tickAuras() {
   const ents = G.ents;
   for (let i = 0; i < ents.length; i++) if (ents[i].kind === 'unit') ents[i].asBuff = 0;
-  for (let pi = 0; pi < 2; pi++) {
+  for (let pi = 0; pi < G.np; pi++) {
     const h = G.players[pi].hero;
     if (!h || h.dead || h.ranks.rally <= 0) continue;
     const a = ABIL.rally, r = h.ranks.rally;
@@ -2817,11 +2852,39 @@ function armyValue(units) {
 }
 
 function makeAI(p) {
-  const foe = p.id === 0 ? 1 : 0;                       // who this AI is fighting
-  const foeBase = p.id === 0 ? G.base1 : G.base0;       // fallback target before scouting
+  // Free-for-all, so there is no single opponent: "hostile" is a predicate
+  // rather than an index. Every enemy-seeking query below already picks the
+  // nearest match, which means each AI naturally fights whoever is closest —
+  // its neighbouring corners first and the far corner last — without needing
+  // any explicit target selection.
+  const hostile = (o) => o !== p.id && o !== NEUTRAL;
+  // Fallback heading before anything has been scouted: the nearest start that
+  // still has someone alive in it.
+  //
+  // Scan order starts at the seat after this one, and ties go to the first
+  // seen. That detail decides the whole game: on a square map a seat's two
+  // neighbours are exactly equidistant, so breaking ties by lowest index made
+  // every seat pick the lowest-indexed neighbour — p0 and p1 were each hunted
+  // by two opponents while nobody ever went for p2 or p3, and the highest seat
+  // won 15 of 16 self-play games without being attacked. Starting the scan at
+  // (p.id + 1) turns that into a cycle: each seat targets the next one round,
+  // so every seat is hunted exactly once.
+  function nearestFoeBase() {
+    const home = G.seatBase[p.id];
+    let best = null, bd = Infinity;
+    for (let k = 1; k < G.np; k++) {
+      const i = (p.id + k) % G.np;
+      if (G.players[i].eliminated) continue;
+      const b = G.seatBase[i];
+      if (!b) continue;
+      const d = dist2(t2w(b.x), t2w(b.y), t2w(home.x), t2w(home.y));
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best || G.seatBase[(p.id + 1) % G.np];
+  }
   const ai = {
     p: p,
-    foe: foe,
+    foe: hostile,
     acc: 0,
     phase: 'open',
     waveT: 0,
@@ -2837,7 +2900,7 @@ function makeAI(p) {
 
     init() {
       const hall = playerBuildings(p).find(b => b.def.dropoff);
-      const myBase = p.id === 0 ? G.base0 : G.base1;
+      const myBase = G.seatBase[p.id];
       this.homeX = hall ? hall.x : t2w(myBase.x);
       this.homeY = hall ? hall.y : t2w(myBase.y);
       const cx = WORLD * 0.5, cy = WORLD * 0.5;
@@ -2850,7 +2913,7 @@ function makeAI(p) {
     },
 
     onAttacked(e, src) {
-      if (!src || src.owner !== foe) return;
+      if (!src || !hostile(src.owner)) return;
       if (e.kind === 'building' || dist(e.x, e.y, this.homeX, this.homeY) < 14 * TILE) {
         this.defendT = 22; this.defX = e.x; this.defY = e.y;
       }
@@ -3079,22 +3142,28 @@ function makeAI(p) {
     /* ---- army ---- */
     knownEnemyTarget() {
       const mem = p.fog.memory;
-      let best = null, bd = Infinity;
+      let best = null, bd = Infinity, br = 99;
+      // Same tie-break as nearestFoeBase, and for the same reason: on a
+      // symmetric map two enemy halls sit at exactly equal distance, and
+      // resolving that by array order sends everyone at the lowest seat. rank
+      // counts round from this seat, so an exact tie goes to the next seat on.
+      const rank = (o) => (o - p.id + G.np) % G.np;
       mem.forEach(v => {
-        if (v.owner !== foe) return;
-        const d = dist2(v.x, v.y, this.homeX, this.homeY);
-        if (d < bd) { bd = d; best = v; }
+        if (!hostile(v.owner)) return;
+        const d = dist2(v.x, v.y, this.homeX, this.homeY), r = rank(v.owner);
+        if (d < bd || (d === bd && r < br)) { bd = d; br = r; best = v; }
       });
       if (best) return { x: best.x, y: best.y };
       // live sight
       for (const e of G.ents) {
-        if (e.dead || e.owner !== foe || e.kind !== 'building') continue;
+        if (e.dead || !hostile(e.owner) || e.kind !== 'building') continue;
         if (!p.fog.vis[ti(w2t(e.x), w2t(e.y))]) continue;
-        const d = dist2(e.x, e.y, this.homeX, this.homeY);
-        if (d < bd) { bd = d; best = { x: e.x, y: e.y }; }
+        const d = dist2(e.x, e.y, this.homeX, this.homeY), r = rank(e.owner);
+        if (d < bd || (d === bd && r < br)) { bd = d; br = r; best = { x: e.x, y: e.y }; }
       }
       if (best) return best;
-      return { x: t2w(foeBase.x), y: t2w(foeBase.y) };
+      const fb = nearestFoeBase();
+      return { x: t2w(fb.x), y: t2w(fb.y) };
     },
 
     manageArmy() {
@@ -3777,7 +3846,7 @@ function drawTorso(x, y, w, h, col, lite, dark) {
 function drawUnit(e, x, y) {
   const f = FACTIONS[e.owner];
   const col = f.color, dark = f.dark, lite = f.light;
-  const thorn = (e.owner === 1);
+  const thorn = isThorn(e.owner);
   const r = e.radius;
   const bob = e.moving ? Math.abs(Math.sin(e.anim * 6)) * 1.1 : 0;
   const yy = y - bob;
@@ -4840,7 +4909,7 @@ function drawUnit(e, x, y) {
 function drawBust(e) {
   const f = FACTIONS[e.owner];
   const col = f.color, dark = f.dark, lite = f.light;
-  const thorn = (e.owner === 1);
+  const thorn = isThorn(e.owner);
   const W = 76, H = 76, cx = 38;
   const skin = '#e0b78c', skinShade = '#b98c63';
 
@@ -7012,7 +7081,7 @@ function drawCastle(b, x, y, w, h, f, flash) {
   for (let cx = wx + 3; cx < wx + ww - 6; cx += 11) {
     ctx.fillStyle = hi;
     ctx.fillRect(cx, wy - 5, 6, 7);
-    if (b.owner === 1) {
+    if (isThorn(b.owner)) {
       ctx.fillStyle = f.dark;
       ctx.beginPath();
       ctx.moveTo(cx + 3, wy - 11); ctx.lineTo(cx + 6, wy - 4); ctx.lineTo(cx, wy - 4);
@@ -7072,7 +7141,7 @@ function drawCastle(b, x, y, w, h, f, flash) {
 
   // ---------- towers ----------
   const tr = keep ? 11 : 10, rh = keep ? 20 : 16;
-  const spiky = b.owner === 1;
+  const spiky = isThorn(b.owner);
   drawTurret(wx + 3, wy + wh * 0.52, tr, rh, f, spiky, lo, mid, hi);
   drawTurret(wx + ww - 3, wy + wh * 0.52, tr, rh, f, spiky, lo, mid, hi);
   if (keep) {
@@ -7338,8 +7407,13 @@ function refreshSpectate() {
   if (!EL.spectate) return;
   if (!G || !G.selfPlay) { EL.spectate.classList.remove('show'); return; }
   EL.spectate.classList.add('show');
+  const seats = [];
+  for (let i = 0; i < G.np; i++) {
+    seats.push('<b style="color:' + FACTIONS[i].color + '">' + FACTIONS[i].name +
+      (G.players[i].eliminated ? ' &dagger;' : '') + '</b>');
+  }
   EL.spectate.innerHTML =
-    'SPECTATING &nbsp;<b>' + FACTIONS[0].name + '</b> vs <b>' + FACTIONS[1].name + '</b>' +
+    'SPECTATING &nbsp;' + seats.join(' vs ') +
     ' &nbsp;&bull;&nbsp; speed <b>' + (G.speed || 1) + '&times;</b> <span style="opacity:.7">[ / ]</span>' +
     ' &nbsp;&bull;&nbsp; vision <b>' + (G.godMode ? 'ALL' : 'Accord only') + '</b> <span style="opacity:.7">(V)</span>';
 }
@@ -7549,7 +7623,7 @@ function buildCard() {
       const req = buildingRequirementsMet(p, t);
       const aff = canAfford(p, d.gold, d.lumber);
       CARD.push(ent(d.icon, d.name, d.hotkey,
-        '<b>' + ((e.owner === 1 && d.altName) ? d.altName : d.name) + '</b>' + costLine(d.gold, d.lumber, 0, d.time) +
+        '<b>' + ((isThorn(e.owner) && d.altName) ? d.altName : d.name) + '</b>' + costLine(d.gold, d.lumber, 0, d.time) +
         (!req ? '<div class="warn">Requires a Keep</div>' : '') +
         (!aff ? '<div class="warn">Not enough resources</div>' : '') +
         '<div>' + d.desc + '</div>',
@@ -7592,7 +7666,7 @@ function buildCard() {
     if (b.def.trains) {
       for (const t of b.def.trains) {
         const d = UNITS[t];
-        const nm = (b.owner === 1 && d.altName) ? d.altName : d.name;
+        const nm = (isThorn(b.owner) && d.altName) ? d.altName : d.name;
         const aff = canAfford(p, d.gold, d.lumber);
         const food = p.foodUsed + p.foodQueued + d.food <= p.foodCap;
         CARD.push(ent(glyphForType(t), nm, d.hotkey,
@@ -7631,7 +7705,7 @@ function buildCard() {
       const haveHero = !!p.hero;
       const cost = p.heroSave ? heroReviveCost(p) : 0;
       CARD.push(ent('★', p.heroSave ? 'Revive Hero' : 'Summon Hero', 'V',
-        '<b>' + (p.heroSave ? 'Revive ' : 'Summon ') + FACTIONS[0].hero + '</b>' +
+        '<b>' + (p.heroSave ? 'Revive ' : 'Summon ') + FACTIONS[b.owner].hero + '</b>' +
         (cost ? costLine(cost, 0, 0, CONFIG.heroReviveTime) : '<div class="cost">free — first summon</div>') +
         '<div>Your hero gains levels, abilities and relics. Only one may live at a time.</div>',
         () => { startRevive(b); buildCard(); refreshInfo(); },
@@ -8232,6 +8306,7 @@ function makePlayer(id) {
     upg: { melee: 0, ranged: 0, armor: 0 },
     hasKeep: false, hasHall: true,
     hero: null, heroSave: null,
+    eliminated: false, eliminatedAt: 0,
     fog: makeFog(), alertCd: 0, noHallT: 0,
     stats: { trained: 0, kills: 0, lost: 0, gold: 0, lumber: 0, razed: 0 }
   };
@@ -8239,6 +8314,8 @@ function makePlayer(id) {
 
 function startGame(seedText, diffKey, opts) {
   sfxInit();
+  const np = Math.max(2, Math.min(MAX_PLAYERS,
+    (opts && opts.players) || CONFIG.defaultPlayers));
   const map = genMap(seedText);
   __uid = 1;
   PROJ.length = 0; FLOATS.length = 0; EFFECTS.length = 0; CORPSES.length = 0;
@@ -8249,15 +8326,23 @@ function startGame(seedText, diffKey, opts) {
     diffKey: diffKey,
     diff: DIFF[diffKey],
     terr: map.terr, treeHp: map.treeHp, shade: map.shade,
-    base0: map.base0, base1: map.base1,
+    bases: map.bases,
+    np: np,
     ents: [], byId: new Map(), camps: [],
-    players: [makePlayer(0), makePlayer(1), makePlayer(2)],
+    // Always build every seat object, active or not. players is indexed by
+    // owner id and NEUTRAL sits at the end of it, so a short array would leave
+    // holes that every `G.players[e.owner]` lookup would fall into.
+    players: (function () {
+      const a = [];
+      for (let i = 0; i <= NEUTRAL; i++) a.push(makePlayer(i));
+      return a;
+    })(),
     sel: [], groups: {},
     cam: { x: 0, y: 0, z: 1 },
     time: 0, tick: 0, isNight: false,
     pathBudget: CONFIG.pathSearchesPerTick,
     rnd: mulberry32(hashSeed(seedText) ^ 0x9e3779b9),
-    revealed: [false, false, false],
+    revealed: [false, false, false, false, false],
     hoverEnt: null, lastAlertX: 0, lastAlertY: 0, pingT: 0,
     badTrees: new Map(),
     ai: null, ais: null, over: null, endT: 0,
@@ -8269,7 +8354,7 @@ function startGame(seedText, diffKey, opts) {
     godMode: !!(opts && opts.godMode),
     speed: 1
   };
-  G.players[2].name = 'Wilds';
+  G.players[NEUTRAL].name = 'Wilds';
   input.placing = null; input.targetMode = null; input.castKey = null;
   input.dragging = false; input.mmDrag = false;
   rebuildTerrBlock();
@@ -8284,9 +8369,14 @@ function startGame(seedText, diffKey, opts) {
   // starting bases. swapBases is a fairness-testing hook: it puts each player at
   // the other's start so self-play can tell a positional advantage apart from an
   // advantage that follows the player index through order-dependent code.
-  for (let pid = 0; pid < 2; pid++) {
-    const atTopRight = G.swapBases ? (pid === 0) : (pid === 1);
-    const b = atTopRight ? map.base1 : map.base0;
+  // swapBases is a fairness-testing hook: it rotates every seat one corner on,
+  // so self-play can tell a positional advantage apart from one that follows
+  // the player index through order-dependent code.
+  const slots = BASE_SLOTS[G.np];
+  G.seatBase = [];
+  for (let pid = 0; pid < G.np; pid++) {
+    const b = map.bases[slots[G.swapBases ? (pid + 1) % G.np : pid]];
+    G.seatBase[pid] = b;
     const hall = spawnBuilding('hall', pid, b.x - 2, b.y - 2, true);
     const p = G.players[pid];
     p.hasHall = true;
@@ -8303,16 +8393,16 @@ function startGame(seedText, diffKey, opts) {
     recomputeFood(p);
   }
 
-  G.ais = [null, null];
-  G.ais[1] = makeAI(G.players[1]);
-  G.ais[1].init();
+  G.ais = [];
+  for (let i = 0; i < G.np; i++) G.ais.push(null);
+  for (let i = 1; i < G.np; i++) { G.ais[i] = makeAI(G.players[i]); G.ais[i].init(); }
   if (G.selfPlay) {                       // player 0 driven by the same code
     G.ais[0] = makeAI(G.players[0]);
     G.ais[0].init();
   }
   G.ai = G.ais[1];                        // kept for anything still naming it
 
-  updateFog(G.players[0]); updateFog(G.players[1]);
+  for (let i = 0; i < G.np; i++) updateFog(G.players[i]);
   const h0 = playerBuildings(G.players[0])[0];
   centerCam(h0.x, h0.y);
   G.sel = [];
@@ -8354,7 +8444,7 @@ function simTick() {
   tickFloats();
   tickCamps();
 
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < G.np; i++) {
     const p = G.players[i];
     if (p.alertCd > 0) p.alertCd -= DT;
     const hasHall = playerBuildings(p).some(b => b.def.dropoff && b.built);
@@ -8363,56 +8453,95 @@ function simTick() {
       p.noHallT += DT;
       if (p.noHallT >= CONFIG.revealNoHall && !G.revealed[i]) {
         G.revealed[i] = true;
-        addMsg(i === 0 ? 'Without a Town Hall, your forces are revealed!' : 'The Thornkin have no hall — their forces are revealed.', i === 0);
+        addMsg(i === 0
+          ? 'Without a Town Hall, your forces are revealed!'
+          : p.name + ' have no hall — their forces are revealed.', i === 0);
       }
     } else { p.noHallT = 0; G.revealed[i] = false; }
   }
 
-  if (G.tick % 6 === 0) { updateFog(G.players[0]); updateFog(G.players[1]); }
+  if (G.tick % 6 === 0) { for (let i = 0; i < G.np; i++) updateFog(G.players[i]); }
   if (G.tick % 15 === 0 && G.ais) {
-    // Alternate which side thinks first. Stepping one AI consistently ahead of
-    // the other hands it the first attack every wave, and attacking into a
+    // Rotate which seat thinks first. Stepping one AI consistently ahead of
+    // the others hands it the first attack every wave, and attacking into a
     // defender is the losing side of that trade — self-play measured the side
-    // that always moved second winning about two games in three.
-    const first = ((G.tick / 15) | 0) % 2;
-    if (G.ais[first]) G.ais[first].tick();
-    if (G.ais[1 - first]) G.ais[1 - first].tick();
+    // that always moved second winning about two games in three. With four
+    // seats the same bias would compound, so the whole order rotates.
+    const off = ((G.tick / 15) | 0) % G.np;
+    for (let k = 0; k < G.np; k++) {
+      const i = (off + k) % G.np;
+      if (G.ais[i]) G.ais[i].tick();
+    }
   }
 
   sweepDead();
   if (G.tick % 30 === 0) checkEnd();
 }
 
+/* Free-for-all: a seat is out when it has no buildings left, and the game ends
+   when you are out, or when you are the only seat left. Note the AIs can and do
+   eliminate each other, so a win is not always a win over all three — it is a
+   win over whoever outlasted the others. */
 function checkEnd() {
-  const b0 = countBuildings(G.players[0], null, false);
-  const b1 = countBuildings(G.players[1], null, false);
-  if (b1 === 0) endGame(true);
-  else if (b0 === 0) endGame(false);
+  let aliveCount = 0, lastAlive = -1;
+  for (let i = 0; i < G.np; i++) {
+    const out = countBuildings(G.players[i], null, false) === 0;
+    if (out) {
+      if (!G.players[i].eliminated) {
+        G.players[i].eliminated = true;
+        G.players[i].eliminatedAt = G.time;
+        if (i !== 0) addMsg(G.players[i].name + ' has been driven from the valley.');
+      }
+    } else { aliveCount++; lastAlive = i; }
+  }
+  // In self-play nobody is watching through player 0's eyes, so the game runs
+  // on until one seat is left. Ending it the moment seat 0 falls would throw
+  // away the rest of the match and make every run look like a seat-0 loss.
+  if (G.selfPlay) { if (aliveCount <= 1) endGame(lastAlive === 0); return; }
+  if (G.players[0].eliminated) endGame(false);
+  else if (aliveCount === 1) endGame(true);
 }
 function endGame(win) {
   if (G.state === 'over') return;
   G.state = 'over';
   G.over = win;
   sfx(win ? 'victory' : 'defeat');
-  const p = G.players[0], q = G.players[1];
+  const p = G.players[0];
+  // With three opponents the old side-by-side "(enemy n)" column has no single
+  // enemy to name, so the stats become your own figures plus one line per
+  // opposing seat showing how it finished and when it fell.
+  const foes = [];
+  for (let i = 1; i < G.np; i++) foes.push(G.players[i]);
+  const standing = foes.filter(f => !f.eliminated);
   EL.endTitle.textContent = win ? 'VICTORY' : 'DEFEAT';
   EL.endTitle.style.color = win ? '#f6d98c' : '#e07a6a';
   EL.endSub.textContent = win
-    ? 'The Thornkin are driven from the valley. The Accord holds the Hollowwood.'
-    : 'The Accord is broken. Thorn and root reclaim the valley.';
+    ? 'The valley is held. The Accord stands alone in the Hollowwood.'
+    : (standing.length === 1
+        ? 'The Accord is broken. ' + standing[0].name + ' claim the Hollowwood.'
+        : 'The Accord is broken. The valley belongs to the briar.');
+  const heroLvl = (q) => (q.hero ? q.hero.level : (q.heroSave ? q.heroSave.level : 0));
   const rows = [
     ['Time played', fmtTime(G.time)],
     ['Map seed', G.seedText],
-    ['Difficulty', G.diff.label],
+    ['Difficulty', G.diff.label + ' &middot; ' + G.np + '-way free-for-all'],
     ['&nbsp;', '&nbsp;'],
-    ['Units trained', p.stats.trained + ' <span class="dim">(enemy ' + q.stats.trained + ')</span>'],
-    ['Enemies killed', p.stats.kills + ' <span class="dim">(enemy ' + q.stats.kills + ')</span>'],
-    ['Units lost', p.stats.lost + ' <span class="dim">(enemy ' + q.stats.lost + ')</span>'],
-    ['Buildings razed', p.stats.razed + ' <span class="dim">(enemy ' + q.stats.razed + ')</span>'],
-    ['Gold gathered', Math.round(p.stats.gold) + ' <span class="dim">(enemy ' + Math.round(q.stats.gold) + ')</span>'],
-    ['Lumber gathered', Math.round(p.stats.lumber) + ' <span class="dim">(enemy ' + Math.round(q.stats.lumber) + ')</span>'],
-    ['Hero level', (p.hero ? p.hero.level : (p.heroSave ? p.heroSave.level : 0)) + ' <span class="dim">(enemy ' + (q.hero ? q.hero.level : (q.heroSave ? q.heroSave.level : 0)) + ')</span>']
+    ['Units trained', p.stats.trained],
+    ['Enemies killed', p.stats.kills],
+    ['Units lost', p.stats.lost],
+    ['Buildings razed', p.stats.razed],
+    ['Gold gathered', Math.round(p.stats.gold)],
+    ['Lumber gathered', Math.round(p.stats.lumber)],
+    ['Hero level', heroLvl(p)],
+    ['&nbsp;', '&nbsp;']
   ];
+  for (const q of foes) {
+    rows.push([
+      '<span style="color:' + FACTIONS[q.id].color + '">' + q.name + '</span>',
+      (q.eliminated ? 'fell at ' + fmtTime(q.eliminatedAt) : 'still standing') +
+      ' <span class="dim">&middot; ' + q.stats.kills + ' kills, ' + q.stats.razed + ' razed</span>'
+    ]);
+  }
   EL.endStats.innerHTML = rows.map(r => '<div class="statline"><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
   EL.scEnd.classList.add('show');
 }
@@ -8464,7 +8593,8 @@ function dmgTableHTML() {
 }
 function helpHTML() {
   let h = '<h1 class="title" style="font-size:28px">HOW TO PLAY</h1>';
-  h += '<p class="lore">You lead <b>The Ember Accord</b> against <b>The Thornkin</b>. Gather gold and lumber, raise a settlement, ' +
+  h += '<p class="lore">You lead <b>The Ember Accord</b> in a free-for-all against up to three rival claims &mdash; ' +
+    'and they fight each other as readily as they fight you. Gather gold and lumber, raise a settlement, ' +
     'level your hero on the wild camps, and raze every enemy building.</p>';
   h += '<h3>Controls</h3><div class="kgrid">' +
     '<b>Left-click</b><span>Select. Drag a box to select many. Shift-click adds or removes. Double-click selects every unit of that type on screen.</span>' +
@@ -8531,6 +8661,15 @@ document.querySelectorAll('[data-diff]').forEach(b => {
     document.querySelectorAll('[data-diff]').forEach(x => x.classList.toggle('sel', x === b));
   });
 });
+// Opponent count. Three is the default: a four-way free-for-all, which is the
+// only count the map is exactly symmetric for besides two.
+let selOpp = CONFIG.defaultPlayers - 1;
+document.querySelectorAll('[data-opp]').forEach(b => {
+  b.addEventListener('click', () => {
+    selOpp = parseInt(b.dataset.opp, 10);
+    document.querySelectorAll('[data-opp]').forEach(x => x.classList.toggle('sel', x === b));
+  });
+});
 EL.seedIn.value = randomSeedText();
 console.log('%cEmberfall%c build ' + BUILD, 'font-weight:bold;color:#f6d98c', 'color:#999');
 const buildEl = document.getElementById('buildStamp');
@@ -8543,12 +8682,13 @@ document.getElementById('btnReroll').addEventListener('click', () => { EL.seedIn
 document.getElementById('btnStart').addEventListener('click', () => {
   sfxInit();
   if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
-  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff);
+  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff, { players: selOpp + 1 });
 });
 document.getElementById('btnWatch').addEventListener('click', () => {
   sfxInit();
   if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
-  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff, { selfPlay: true, godMode: true });
+  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff,
+    { selfPlay: true, godMode: true, players: selOpp + 1 });
 });
 document.getElementById('btnHelp').addEventListener('click', openHelp);
 document.getElementById('btnHelp2').addEventListener('click', openHelp);
@@ -8557,9 +8697,9 @@ document.getElementById('btnMenu').addEventListener('click', () => {
   if (G && G.state === 'play') pauseGame(true); else if (G && G.state === 'pause') resumeGame();
 });
 document.getElementById('btnResume').addEventListener('click', resumeGame);
-document.getElementById('btnRestart').addEventListener('click', () => { startGame(G.seedText, G.diffKey); });
+document.getElementById('btnRestart').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np }); });
 document.getElementById('btnQuit').addEventListener('click', quitToTitle);
-document.getElementById('btnAgain').addEventListener('click', () => { startGame(G.seedText, G.diffKey); });
+document.getElementById('btnAgain').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np }); });
 document.getElementById('btnTitle2').addEventListener('click', quitToTitle);
 const volIn = document.getElementById('volIn'), volIn2 = document.getElementById('volIn2');
 const btnMute = document.getElementById('btnMute'), btnMute2 = document.getElementById('btnMute2');

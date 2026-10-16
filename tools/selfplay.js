@@ -23,6 +23,7 @@ const arg = (name, dflt) => {
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : dflt;
 };
 const GAMES = parseInt(arg('games', '20'), 10);
+const SEATS = parseInt(arg('seats', '4'), 10);
 const DIFF = arg('diff', 'normal');
 const MINUTES = parseFloat(arg('minutes', '20'));
 const MAX_TICKS = Math.round(MINUTES * 60 * 30);
@@ -36,7 +37,7 @@ const BUILD_TYPES = ['hall', 'keep', 'farm', 'barracks', 'workshop', 'altar', 't
    upgraded has become a Keep, so "halls at the end" reads as near zero however
    many were built. */
 function sample(g, peaks) {
-  for (const id of [0, 1]) {
+  for (let id = 0; id < g.np; id++) {
     const p = g.players[id];
     if (p.foodUsed > peaks[id].foodPeak) peaks[id].foodPeak = p.foodUsed;
     for (const t of UNIT_TYPES) {
@@ -54,8 +55,10 @@ function sample(g, peaks) {
     if (p.hasKeep) peaks[id].keep = 1;
   }
 }
-function freshPeaks() {
-  return [0, 1].map(() => {
+function freshPeaks(np) {
+  const seats = [];
+  for (let i = 0; i < np; i++) seats.push(i);
+  return seats.map(() => {
     const units = {}, builds = {};
     for (const t of UNIT_TYPES) units[t] = 0;
     for (const t of BUILD_TYPES) builds[t] = 0;
@@ -75,15 +78,17 @@ function snapshotSide(g, id, peak) {
 }
 
 const games = [];
-process.stdout.write('running ' + GAMES + ' self-play games on ' + DIFF +
+process.stdout.write('running ' + GAMES + ' self-play games, ' + SEATS + ' seats, ' + DIFF +
   ' (cap ' + MINUTES + ' game-minutes each)\n');
 
 for (let n = 0; n < GAMES; n++) {
   const seed = 'SELFPLAY-' + String(n + 1).padStart(3, '0');
-  A.startGame(seed, DIFF, { selfPlay: true });
+  A.startGame(seed, DIFF, { selfPlay: true, players: SEATS });
   const g = G.g;
-  const peaks = freshPeaks();
-  let firstBlood = null, firstAttackWave = [null, null];
+  const peaks = freshPeaks(g.np);
+  let firstBlood = null;
+  const firstAttackWave = [];
+  for (let i = 0; i < g.np; i++) firstAttackWave.push(null);
 
   let t = 0;
   for (; t < MAX_TICKS; t++) {
@@ -91,27 +96,32 @@ for (let n = 0; n < GAMES; n++) {
     const gg = G.g;
     if (gg.state === 'over') break;
     if (t % 30 === 0) sample(gg, peaks);          // once a game-second is plenty
-    for (const id of [0, 1]) {
+    for (let id = 0; id < gg.np; id++) {
       if (firstAttackWave[id] === null && gg.ais[id] && gg.ais[id].attacking) firstAttackWave[id] = gg.time;
     }
-    if (firstBlood === null && (gg.players[0].stats.lost || gg.players[1].stats.lost)) firstBlood = gg.time;
+    if (firstBlood === null) {
+      for (let id = 0; id < gg.np; id++) if (gg.players[id].stats.lost) { firstBlood = gg.time; break; }
+    }
   }
   const g2 = G.g;
-  const finished = g2.state === 'over';
-  // `over` is from player 0's point of view: true means player 0 won
-  const winner = !finished ? null : (g2.over ? 0 : 1);
-  games.push({
-    seed, finished, winner, time: g2.time,
-    firstBlood, firstAttackWave,
-    sides: [snapshotSide(g2, 0, peaks[0]), snapshotSide(g2, 1, peaks[1])]
-  });
+  // A game counts as decided only when exactly one seat is left. Reading
+  // `over` would mis-score a run that hit the time cap with several alive.
+  const alive = [];
+  for (let i = 0; i < g2.np; i++) if (!g2.players[i].eliminated) alive.push(i);
+  const finished = g2.state === 'over' && alive.length === 1;
+  const winner = finished ? alive[0] : null;
+  const sides = [];
+  for (let i = 0; i < g2.np; i++) sides.push(snapshotSide(g2, i, peaks[i]));
+  games.push({ seed, finished, winner, time: g2.time, firstBlood, firstAttackWave, sides });
   process.stdout.write('  ' + seed + '  ' +
-    (finished ? ('P' + winner + ' win @' + A.fmtTime(g2.time)) : ('UNRESOLVED @' + A.fmtTime(g2.time))) + '\n');
+    (finished ? ('P' + winner + ' win @' + A.fmtTime(g2.time))
+              : ('UNRESOLVED (' + alive.length + ' alive) @' + A.fmtTime(g2.time))) + '\n');
 }
 
 /* ---------------- aggregate ---------------- */
 const fin = games.filter(g => g.finished);
-const wins = [games.filter(g => g.winner === 0).length, games.filter(g => g.winner === 1).length];
+const wins = [];
+for (let i = 0; i < SEATS; i++) wins.push(games.filter(g => g.winner === i).length);
 const unresolved = games.length - fin.length;
 const times = fin.map(g => g.time).sort((a, b) => a - b);
 const median = times.length ? times[Math.floor(times.length / 2)] : 0;
@@ -122,20 +132,27 @@ line('\n' + '='.repeat(66));
 line('SELF-PLAY REPORT   ' + games.length + ' games, difficulty ' + DIFF);
 line('='.repeat(66));
 
-line('\n-- Fairness (identical AI both sides; expect a coin flip) --');
-const total = wins[0] + wins[1];
-const pct = total ? (wins[0] / total * 100) : 0;
-line('  bottom-left (P0) ' + wins[0] + '   top-right (P1) ' + wins[1] +
-     '   unresolved ' + unresolved);
+line('\n-- Fairness (identical AI in every seat; expect an even split) --');
+const total = wins.reduce((a, b) => a + b, 0);
+for (let i = 0; i < SEATS; i++) {
+  line('  seat ' + i + '  ' + String(wins[i]).padStart(3) + ' wins' +
+       (total ? '   ' + (wins[i] / total * 100).toFixed(0) + '%' : ''));
+}
+line('  unresolved ' + unresolved);
 if (total >= 8) {
-  // 95% binomial interval, normal approximation
-  const se = Math.sqrt(0.25 / total) * 100;
-  const lo = 50 - 1.96 * se, hi = 50 + 1.96 * se;
-  line('  P0 win rate ' + pct.toFixed(0) + '%  (a fair map gives ' +
-       lo.toFixed(0) + '-' + hi.toFixed(0) + '% at this sample size)');
-  line(pct < lo || pct > hi
-    ? '  >> SKEWED: one start position is winning more than chance explains.'
-    : '  >> within chance — no detectable start-position bias.');
+  // 95% interval on a fair multinomial, normal approximation
+  const exp = total / SEATS;
+  const se = Math.sqrt(exp * (1 - 1 / SEATS));
+  let worst = 0, worstSeat = 0;
+  for (let i = 0; i < SEATS; i++) {
+    const dv = Math.abs(wins[i] - exp);
+    if (dv > worst) { worst = dv; worstSeat = i; }
+  }
+  line('  expected ' + exp.toFixed(1) + ' per seat, 2sd = ' + (2 * se).toFixed(1) +
+       ', largest deviation ' + worst.toFixed(1) + ' (seat ' + worstSeat + ')');
+  line(worst > 2 * se
+    ? '  >> SKEWED: one seat is winning more than chance explains.'
+    : '  >> within chance — no detectable seat bias.');
 } else {
   line('  (too few resolved games to judge; run more)');
 }
