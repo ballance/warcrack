@@ -1,5 +1,8 @@
 # Building art prompts
 
+The Fen Covenant and Gloam Choir material studies live in
+[ART_PROMPTS_RACES.md](ART_PROMPTS_RACES.md).
+
 Companion to [ART_PROMPTS.md](ART_PROMPTS.md), which covers the nine characters
 and is complete. Same workflow: run a prompt, paste the result back into the
 session, I redraw the canvas code to match.

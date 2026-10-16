@@ -1,5 +1,8 @@
 # Character art prompts
 
+The two newest claims — The Fen Covenant and The Gloam Choir — have their own
+page: [ART_PROMPTS_RACES.md](ART_PROMPTS_RACES.md).
+
 Reference prompts for the nine characters in Emberfall. Run them through
 whatever image model you like, then paste the results back into the session and
 I'll redraw the canvas code to match.
