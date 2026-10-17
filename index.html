@@ -248,6 +248,11 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
       <button class="mbtn sel" data-opp="3">3</button>
     </div>
     <div class="row" style="justify-content:center">
+      <label class="lb">Forces</label>
+      <button class="mbtn sel" data-mode="standard">Standard</button>
+      <button class="mbtn" data-mode="limited">Limited</button>
+    </div>
+    <div class="row" style="justify-content:center">
       <label class="lb">Map Seed</label>
       <input type="text" id="seedIn" value="">
       <button class="mbtn" id="btnReroll">Reroll</button>
@@ -326,7 +331,15 @@ const CONFIG = {
   mineSearchTiles: 22,
   mendCd: 7,              // seconds between a caster's mends
   mendHeal: 85,           // hit points restored
-  mendRange: 5,           // tiles    // how far a Laborer will look for a seam on its own
+  mendRange: 5,           // tiles
+
+  /* Limited forces: the opening platoon is all the army anyone gets. Economy
+     still runs, but it buys upgrades, repairs, towers and hero revivals rather
+     than more soldiers, so the game becomes about spending a fixed force well.
+     The food grant keeps the platoon out of upkeep brackets it would otherwise
+     sit in from the first second. */
+  limitedPlatoon: { footman: 4, archer: 3, adept: 1 },
+  limitedFood: 26,    // how far a Laborer will look for a seam on its own
   mineTime: 2.0,          // seconds inside the mine per trip
   chopTime: 2.0,          // seconds per chop
   mineGold: 13500,
@@ -378,7 +391,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-17 · idle';
+const BUILD = '2026-10-17 · platoon';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -2570,6 +2583,12 @@ function trainTime(type, owner) {
   return UNITS[type].buildTime * (aiRun(owner) ? G.diff.trainMul : 1);
 }
 function queueUnit(b, type) {
+  // The one rule of limited forces. Checked here rather than in the command
+  // card alone, so the AI is bound by it too and no path can slip past.
+  if (G.limited) {
+    if (isPlayerSeat(b.owner)) { addMsg('Limited forces — no more soldiers can be trained.'); sfx('nope'); }
+    return false;
+  }
   const p = G.players[b.owner];
   const d = UNITS[type];
   if (!b.built) return false;
@@ -2824,6 +2843,7 @@ function recomputeFood(p) {
     else if (e.kind === 'building' && e.built && e.def.food) cap += e.def.food;
   }
   p.foodUsed = used;
+  if (G.limited) cap += CONFIG.limitedFood;
   p.foodCap = Math.min(CONFIG.foodHardCap, cap);
 }
 function countUnits(p, type) {
@@ -3130,33 +3150,37 @@ function makeAI(p) {
       const halls = bs.filter(b => b.def.dropoff && !b.upKind);
       const foodLeft = p.foodCap - p.foodUsed - p.foodQueued;
 
-      for (const h of halls) {
-        if (workers + h.queue.length < G.diff.maxWorkers && h.queue.length < 2 && foodLeft >= 1) queueUnit(h, 'laborer');
-      }
-      const barracks = bs.filter(b => b.type === 'barracks');
-      const foot = countUnits(p, 'footman'), arch = countUnits(p, 'archer');
-      for (const b of barracks) {
-        if (b.queue.length >= 2) continue;
-        if (p.foodCap - p.foodUsed - p.foodQueued < 2) break;
-        const want = (foot <= arch) ? 'footman' : 'archer';
-        if (!queueUnit(b, want)) queueUnit(b, want === 'footman' ? 'archer' : 'footman');
-      }
-      const shops = bs.filter(b => b.type === 'workshop');
-      for (const b of shops) {
-        if (b.queue.length >= 1) continue;
-        if (countUnits(p, 'siege') >= 4) break;
-        queueUnit(b, 'siege');
-      }
-      // Altars also train casters. Capped low on purpose: they are fragile,
-      // cost three food, and a stack of them beats nothing it could not have
-      // beaten with footmen. Two is enough to answer an enemy heavy line.
-      const altars = bs.filter(b => b.type === 'altar');
-      for (const b of altars) {
-        if (b.queue.length >= 1 || b.reviveTotal > 0) continue;
-        if (p.foodCap - p.foodUsed - p.foodQueued < 3) break;
-        if (countUnits(p, 'adept') >= 2) break;
-        if (foot + arch < 4) break;             // soldiers before casters
-        queueUnit(b, 'adept');
+      // In limited forces there is nothing to train, so the whole production
+      // block is skipped rather than left to fail call by call.
+      if (!G.limited) {
+        for (const h of halls) {
+          if (workers + h.queue.length < G.diff.maxWorkers && h.queue.length < 2 && foodLeft >= 1) queueUnit(h, 'laborer');
+        }
+        const barracks = bs.filter(b => b.type === 'barracks');
+        const foot = countUnits(p, 'footman'), arch = countUnits(p, 'archer');
+        for (const b of barracks) {
+          if (b.queue.length >= 2) continue;
+          if (p.foodCap - p.foodUsed - p.foodQueued < 2) break;
+          const want = (foot <= arch) ? 'footman' : 'archer';
+          if (!queueUnit(b, want)) queueUnit(b, want === 'footman' ? 'archer' : 'footman');
+        }
+        const shops = bs.filter(b => b.type === 'workshop');
+        for (const b of shops) {
+          if (b.queue.length >= 1) continue;
+          if (countUnits(p, 'siege') >= 4) break;
+          queueUnit(b, 'siege');
+        }
+        // Altars also train casters. Capped low on purpose: they are fragile,
+        // cost three food, and a stack of them beats nothing it could not have
+        // beaten with footmen. Two is enough to answer an enemy heavy line.
+        const altars = bs.filter(b => b.type === 'altar');
+        for (const b of altars) {
+          if (b.queue.length >= 1 || b.reviveTotal > 0) continue;
+          if (p.foodCap - p.foodUsed - p.foodQueued < 3) break;
+          if (countUnits(p, 'adept') >= 2) break;
+          if (foot + arch < 4) break;             // soldiers before casters
+          queueUnit(b, 'adept');
+        }
       }
       // altar: summon / revive the hero
       const altar = bs.find(b => b.type === 'altar');
@@ -8745,6 +8769,7 @@ function startGame(seedText, diffKey, opts) {
     hoverEnt: null, lastAlertX: 0, lastAlertY: 0, pingT: 0,
     badTrees: new Map(),
     ai: null, ais: null, over: null, endT: 0,
+    limited: !!(opts && opts.limited),
     selfPlay: !!(opts && opts.selfPlay),
     swapBases: !!(opts && opts.swapBases),
     // God mode is a RENDERING reveal only. It must never write to the fog
@@ -8788,6 +8813,21 @@ function startGame(seedText, diffKey, opts) {
       const mine = bestGoldMine(pid, hall.x, hall.y);
       if (i < 4 && mine) setOrder(u, { t: 'gather', kind: 'gold', mine: mine });
       else setOrder(u, { t: 'gather', kind: 'lumber', treeIdx: -1 });
+    }
+    // Limited forces: the whole army arrives with the first dawn. The hero is
+    // deliberately NOT included — the Altar still summons and still revives, so
+    // gold keeps a purpose and losing your champion is recoverable while losing
+    // a Footman never is.
+    if (G.limited) {
+      let ring = 0;
+      for (const t in CONFIG.limitedPlatoon) {
+        for (let k = 0; k < CONFIG.limitedPlatoon[t]; k++) {
+          const a = (ring / 9) * Math.PI * 2 + 0.3;
+          const sp = freeSpotNear(hall.x + Math.cos(a) * 128, hall.y + Math.sin(a) * 128, 10);
+          spawnUnit(t, pid, sp.x, sp.y);
+          ring++;
+        }
+      }
     }
     recomputeFood(p);
   }
@@ -8923,7 +8963,8 @@ function endGame(win) {
   const rows = [
     ['Time played', fmtTime(G.time)],
     ['Map seed', G.seedText],
-    ['Difficulty', G.diff.label + ' &middot; ' + G.np + '-way free-for-all'],
+    ['Difficulty', G.diff.label + ' &middot; ' + G.np + '-way free-for-all' +
+      (G.limited ? ' &middot; limited forces' : '')],
     ['&nbsp;', '&nbsp;'],
     ['Units trained', p.stats.trained],
     ['Enemies killed', p.stats.kills],
@@ -8999,6 +9040,11 @@ function helpHTML() {
     'level your hero on the wild camps, and raze every enemy building.</p>';
   // The four claims, built from the faction table so this page can never drift
   // out of step with what the game actually draws.
+  h += '<h3>Forces</h3><div class="kgrid">' +
+    '<b>Standard</b><span>Build an economy, raise an army, raze everyone else.</span>' +
+    '<b>Limited</b><span>Every claim is handed one platoon and a hero at the start, and no more soldiers can ever be trained. ' +
+    'Gold and lumber still matter \u2014 for upgrades, repairs, Guard Towers and hero revivals \u2014 but the army you have is the army you get.</span>' +
+    '</div>';
   h += '<h3>The Four Claims</h3><div class="kgrid">';
   const CLAIMS = [
     ['squared timber, shingle and ember-brick', 'Settlers. They build straight, and they build to last.'],
@@ -9079,6 +9125,13 @@ document.querySelectorAll('[data-diff]').forEach(b => {
 });
 // Opponent count. Three is the default: a four-way free-for-all, which is the
 // only count the map is exactly symmetric for besides two.
+let selLimited = false;
+document.querySelectorAll('[data-mode]').forEach(b => {
+  b.addEventListener('click', () => {
+    selLimited = b.dataset.mode === 'limited';
+    document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('sel', x === b));
+  });
+});
 let selOpp = CONFIG.defaultPlayers - 1;
 document.querySelectorAll('[data-opp]').forEach(b => {
   b.addEventListener('click', () => {
@@ -9098,13 +9151,13 @@ document.getElementById('btnReroll').addEventListener('click', () => { EL.seedIn
 document.getElementById('btnStart').addEventListener('click', () => {
   sfxInit();
   if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
-  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff, { players: selOpp + 1 });
+  startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff, { players: selOpp + 1, limited: selLimited });
 });
 document.getElementById('btnWatch').addEventListener('click', () => {
   sfxInit();
   if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
   startGame(EL.seedIn.value.trim() || randomSeedText(), selDiff,
-    { selfPlay: true, godMode: true, players: selOpp + 1 });
+    { selfPlay: true, godMode: true, players: selOpp + 1, limited: selLimited });
 });
 document.getElementById('btnHelp').addEventListener('click', openHelp);
 EL.idleW.addEventListener('click', () => cycleIdle('worker'));
@@ -9115,9 +9168,9 @@ document.getElementById('btnMenu').addEventListener('click', () => {
   if (G && G.state === 'play') pauseGame(true); else if (G && G.state === 'pause') resumeGame();
 });
 document.getElementById('btnResume').addEventListener('click', resumeGame);
-document.getElementById('btnRestart').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np }); });
+document.getElementById('btnRestart').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np, limited: G.limited }); });
 document.getElementById('btnQuit').addEventListener('click', quitToTitle);
-document.getElementById('btnAgain').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np }); });
+document.getElementById('btnAgain').addEventListener('click', () => { startGame(G.seedText, G.diffKey, { players: G.np, limited: G.limited }); });
 document.getElementById('btnTitle2').addEventListener('click', quitToTitle);
 const volIn = document.getElementById('volIn'), volIn2 = document.getElementById('volIn2');
 const btnMute = document.getElementById('btnMute'), btnMute2 = document.getElementById('btnMute2');

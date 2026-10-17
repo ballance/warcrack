@@ -157,5 +157,20 @@ const h4 = A.playerBuildings(G.g.players[0]).find(b => b.def.dropoff);
 A.queueUnit(h4, 'laborer'); A.refreshTop();
 ok(!bn.classList.contains('show'), 'a hall with something queued is not idle');
 
+// Limited forces: a platoon at the start and no soldier ever again.
+A.startGame('FLOW-LIM', 'normal', { players: 4, limited: true });
+let lg = G.g;
+const plat = (i) => A.countUnits(lg.players[i], 'footman') + A.countUnits(lg.players[i], 'archer') +
+  A.countUnits(lg.players[i], 'adept');
+ok([0, 1, 2, 3].every(i => plat(i) === 8), 'every seat opens with the same eight-strong platoon');
+ok(lg.players[0].foodUsed <= lg.players[0].foodCap, 'the platoon does not start over the food cap');
+const lh = A.playerBuildings(lg.players[0]).find(b => b.def.dropoff);
+lg.players[0].gold = 9999; lg.players[0].lumber = 9999;
+ok(A.queueUnit(lh, 'laborer') === false, 'training is refused even with resources to spare');
+const before = plat(1);
+for (let i = 0; i < 3 * 60 * 30; i++) { A.simTick(); if (G.g.state === 'over') break; }
+lg = G.g;
+ok(plat(1) <= before, 'an AI seat never grows its platoon');
+
 console.log(fail ? '\n' + fail + ' CHECK(S) FAILED' : '\nALL PLAYER-FLOW CHECKS PASSED');
 process.exit(fail ? 1 : 0);
