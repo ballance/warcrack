@@ -28,7 +28,7 @@ const DIFF = arg('diff', 'normal');
 const MINUTES = parseFloat(arg('minutes', '20'));
 const MAX_TICKS = Math.round(MINUTES * 60 * 30);
 
-const UNIT_TYPES = ['laborer', 'footman', 'archer', 'siege'];
+const UNIT_TYPES = ['laborer', 'footman', 'archer', 'adept', 'siege'];
 const BUILD_TYPES = ['hall', 'keep', 'farm', 'barracks', 'workshop', 'altar', 'tower', 'smith'];
 
 /* Counts are sampled during play and kept at their peak, never read from the

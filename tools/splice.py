@@ -66,7 +66,7 @@ def check(path):
     ba, bb = region(src, 'drawBust')
     leak = sorted(set(re.findall(r'(?<![A-Za-z0-9_.$])(yy|fx|fy|walk)(?![A-Za-z0-9_])', src[ba:bb])))
     assert not leak, 'drawUnit variables leaked into drawBust: %s' % leak
-    for k in ['laborer', 'footman', 'archer', 'siege', 'hero', 'wolf', 'golem']:
+    for k in ['laborer', 'footman', 'archer', 'adept', 'siege', 'hero', 'wolf', 'golem']:
         n = src.count("case '%s':" % k)
         assert n == 2, "case '%s' appears %d times, expected 2" % (k, n)
     for k in ['farm', 'barracks', 'workshop', 'altar', 'tower', 'smith']:
