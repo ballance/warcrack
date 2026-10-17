@@ -172,5 +172,38 @@ for (let i = 0; i < 3 * 60 * 30; i++) { A.simTick(); if (G.g.state === 'over') b
 lg = G.g;
 ok(plat(1) <= before, 'an AI seat never grows its platoon');
 
+// Hiring a wild camp: gold and food for the pack, and they must actually
+// stop being creeps or they keep leashing back to a camp that no longer owns
+// them.
+A.startGame('FLOW-HIRE', 'normal', { players: 4 });
+let hg = G.g;
+const hp2 = hg.players[0];
+const hcamp = hg.camps.find(c => c.tier === 1);
+const hhall = A.playerBuildings(hp2).find(b => b.def.dropoff);
+for (let r = 5; r < 14; r++) {
+  let done = false;
+  for (let a = 0; a < 12; a++) {
+    const tx = Math.round(hhall.x / 32 + Math.cos(a) * r), ty = Math.round(hhall.y / 32 + Math.sin(a) * r);
+    if (A.canPlaceAt('farm', tx, ty, 0)) { A.spawnBuilding('farm', 0, tx, ty, true); done = true; break; }
+  }
+  if (done) break;
+}
+A.simTick();
+const scout = A.spawnUnit('footman', 0, hcamp.x + 40, hcamp.y);
+hg.sel = [scout];
+hp2.gold = 50;              // set the purse BEFORE the card is built from it
+A.afterSelect();
+let card = A.getCARD();
+ok(!!card[10] && card[10].dis, 'hiring is offered but refused with no gold');
+hp2.gold = 2000; A.buildCard(); card = A.getCARD();
+ok(!!card[10] && !card[10].dis, 'with gold and food the pack can be hired');
+const beforeN = A.playerUnits(hp2).length, beforeG = hp2.gold;
+card[10].act();
+ok(A.playerUnits(hp2).length === beforeN + 3, 'the three wolves changed sides');
+ok(hp2.gold < beforeG, 'and were paid for');
+ok(hcamp.cleared, 'the camp counts as cleared');
+ok(A.playerUnits(hp2).filter(u => u.type === 'wolf').every(w => !w.creep && !w.camp),
+   'hired beasts are no longer creeps leashed to a camp');
+
 console.log(fail ? '\n' + fail + ' CHECK(S) FAILED' : '\nALL PLAYER-FLOW CHECKS PASSED');
 process.exit(fail ? 1 : 0);

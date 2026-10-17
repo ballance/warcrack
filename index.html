@@ -391,7 +391,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-17 · platoon';
+const BUILD = '2026-10-17 · wilds';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -2891,6 +2891,72 @@ const CAMP_COMP = {
 };
 const CAMP_DROPS = { 1: ['boots'], 2: ['hpot', 'mpot'], 3: ['ring', 'hpot'] };
 const CAMP_NAMES = { 1: 'Wolf Den', 2: 'Bandit Ruin', 3: 'Golem Cairn' };
+/* The wilds can be bought instead of fought. Clearing a camp pays in hero
+   experience and a relic; hiring one pays in soldiers you did not have to
+   build, and leaves the experience on the table. That is the whole trade.
+
+   Hired beasts are given a food cost they never had as creeps — without it a
+   camp is free army, and buying all four on the map would beat any amount of
+   actual production. */
+const CAMP_HIRE = { 1: 150, 2: 290, 3: 520 };
+const HIRE_FOOD = { wolf: 2, bandit: 2, slinger: 2, golem: 5 };
+function campHireCost(c) { return CAMP_HIRE[c.tier] || 200; }
+function campHireFood(c) {
+  let f = 0;
+  for (const u of c.units) if (!u.dead) f += HIRE_FOOD[u.type] || 2;
+  return f;
+}
+/* The nearest camp still holding its pack, within reach of any of these units. */
+function hireableCamp(units) {
+  let best = null, bd = Infinity;
+  for (const c of G.camps) {
+    if (c.cleared || !c.units.length) continue;
+    if (!c.units.some(u => !u.dead)) continue;
+    for (const u of units) {
+      if (u.kind !== 'unit') continue;
+      const d = dist2(u.x, u.y, c.x, c.y);
+      if (d < bd && d < (6 * TILE) * (6 * TILE)) { bd = d; best = c; }
+    }
+  }
+  return best;
+}
+function hireCamp(camp, owner) {
+  const p = G.players[owner];
+  if (!camp || camp.cleared) return false;
+  const cost = campHireCost(camp), food = campHireFood(camp);
+  if (!canAfford(p, cost, 0)) {
+    if (isPlayerSeat(owner)) { addMsg('Need ' + cost + ' gold to treat with them.'); sfx('nope'); }
+    return false;
+  }
+  if (p.foodUsed + p.foodQueued + food > p.foodCap) {
+    if (isPlayerSeat(owner)) { addMsg('Not enough food for the pack.'); sfx('nope'); }
+    return false;
+  }
+  p.gold -= cost;
+  let n = 0;
+  for (const u of camp.units) {
+    if (u.dead) continue;
+    u.owner = owner;
+    u.creep = false;                 // behaves as one of yours from here on
+    u.sleeping = false;
+    u.camp = null;
+    u.campX = undefined; u.campY = undefined;
+    u.food = HIRE_FOOD[u.type] || 2;
+    u.target = null;
+    setOrder(u, null);
+    u.homeX = u.x; u.homeY = u.y;
+    n++;
+  }
+  camp.units = [];
+  camp.cleared = true;
+  camp.respawnT = 150;
+  recomputeFood(p);
+  if (isPlayerSeat(owner)) {
+    addMsg(CAMP_NAMES[camp.tier] + ' now answers to you — ' + n + ' joined.');
+    sfx('built');
+  }
+  return true;
+}
 
 function setupCamps(defs) {
   for (const d of defs) {
@@ -3247,6 +3313,22 @@ function makeAI(p) {
       if (!G.diff.creep) return false;
       const h = p.hero;
       if (!h || h.dead || h.hp < h.maxHp * 0.55) return false;
+      // Buying the pack is checked BEFORE the creep cooldown, not after. The
+      // cooldown exists to stop the AI re-issuing attack-moves every tick, but
+      // it also meant this never ran at the one moment it matters — when the
+      // hero has actually arrived at the camp it was sent to.
+      // The reserve above the price is small deliberately. An earlier version
+      // asked for cost + 300 and the AI never once hired in four full games:
+      // it runs a lean purse and the most gold it ever held while standing
+      // beside a camp was 300. A pack is good value per gold — three wolves
+      // for roughly the price of one Footman — so the bar only has to clear
+      // the price and leave a little change.
+      for (const c of G.camps) {
+        if (c.cleared || !c.units.length) continue;
+        if (dist2(h.x, h.y, c.x, c.y) > (5 * TILE) * (5 * TILE)) continue;
+        if (p.gold < campHireCost(c) + 80) continue;
+        if (hireCamp(c, p.id)) { this.creepT = 14; return true; }
+      }
       this.creepT -= 0.5;
       if (this.creepT > 0) return false;
       let want = h.level < 4 ? 1 : (h.level < 7 ? 2 : 3);
@@ -8168,6 +8250,22 @@ function buildCard() {
       'turn it off to hold the cast.</div>',
       () => { for (const u of casters) u.autoMend = !onM; sfx('ack'); buildCard(); }, { on: onM });
   }
+  // Standing next to a wild camp, you may treat with it instead of killing it.
+  const hc = hireableCamp(units);
+  if (hc) {
+    const cost = campHireCost(hc), food = campHireFood(hc);
+    const p2 = G.players[0];
+    const aff = p2.gold >= cost;
+    const room = p2.foodUsed + p2.foodQueued + food <= p2.foodCap;
+    CARD[10] = ent('\u262C', 'Hire Pack', 'Y',
+      '<b>Hire the ' + CAMP_NAMES[hc.tier] + '</b>' + costLine(cost, 0, food, 0) +
+      '<div>The pack joins you where it stands. You forfeit the hero experience ' +
+      'and the relic you would have taken by killing them.</div>' +
+      (!aff ? '<div class="warn">Not enough gold</div>' : '') +
+      (!room ? '<div class="warn">Not enough food</div>' : ''),
+      () => { hireCamp(hc, 0); buildCard(); refreshInfo(); refreshTop(); },
+      { dis: !aff || !room });
+  }
   if (hero) {
     let slot = 8;
     for (const k of ABIL_ORDER) {
@@ -9064,6 +9162,7 @@ function helpHTML() {
     '<b>S / H / P</b><span>Stop / Hold position / Patrol.</span>' +
     '<b>M / B / R / G</b><span>Move / Build menu / Repair / Gather.</span>' +
     '<b>V</b><span>Footman Shield Wall (toggle). <b>D</b> toggles caster Mend.</span>' +
+    '<b>Y</b><span>Hire a wild camp your units are standing beside: the pack changes sides on the spot, for gold and food. You give up the hero experience and the relic you would have had for killing them.</span>' +
     '<b>` / \\</b><span>Jump to the next idle Laborer / idle building. The counters in the top bar appear only when something is idle, and can be clicked.</span>' +
     '<b>Q / E / R</b><span>Hero abilities. <b>L</b> spends a skill point. <b>Z X C V</b> use inventory slots 1-4.</span>' +
     '<b>Ctrl+1..9</b><span>Assign control group. <b>1..9</b> recalls it; press twice to centre the camera on it.</span>' +
