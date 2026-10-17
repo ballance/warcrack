@@ -22,6 +22,13 @@ canvas{display:block}
 #topbar .res{display:flex;align-items:center;gap:6px;margin-right:18px;white-space:nowrap}
 #topbar .sw{width:12px;height:12px;border-radius:2px;border:1px solid #000;display:inline-block}
 #topbar .sp{flex:1}
+/* Idle counters. From the oldest complaint about this genre: buildings lie
+   idle and nothing tells you. Hidden entirely at zero so a tidy base shows a
+   clean bar rather than two permanent noughts. */
+#topbar .idlebox{margin-right:10px;display:none;align-items:center;gap:5px;cursor:pointer;
+  padding:1px 7px;border:1px solid #7a6336;border-radius:9px;background:rgba(80,64,30,.5)}
+#topbar .idlebox.show{display:flex}
+#topbar .idlebox:hover{border-color:#f0cf7f;background:rgba(120,96,44,.6)}
 #upk{font-size:12px;padding:1px 7px;border-radius:3px;border:1px solid #000}
 #clk{font-variant-numeric:tabular-nums;margin-right:14px}
 #daynight{display:flex;align-items:center;gap:6px;margin-right:14px}
@@ -185,6 +192,10 @@ input:focus-visible,#minimap:focus-visible{outline:2px solid #f0cf7f;outline-off
     <div class="res"><span class="sw" style="background:#6fbf52"></span><span id="rLum">0</span></div>
     <div class="res"><span class="sw" style="background:#d8954a"></span><span id="rFood">0/0</span></div>
     <div class="res"><span id="upk">No Upkeep</span></div>
+    <div class="idlebox" id="idleW" title="Idle Laborers — click or press ` to go to the next one">
+      <span class="sw" style="background:#9ad7ff"></span><span id="idleWn">0</span></div>
+    <div class="idlebox" id="idleB" title="Idle buildings — click or press \ to go to the next one">
+      <span class="sw" style="background:#f0cf7f"></span><span id="idleBn">0</span></div>
     <div class="sp"></div>
     <div id="daynight"><div id="dnorb"></div><span id="dntxt">Day</span></div>
     <span id="clk">0:00</span>
@@ -367,7 +378,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-17 · adepts';
+const BUILD = '2026-10-17 · idle';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -7714,6 +7725,10 @@ const EL = {
   endStats: document.getElementById('endStats'),
   seedIn: document.getElementById('seedIn'),
   spectate: document.getElementById('spectate'),
+  idleW: document.getElementById('idleW'),
+  idleWn: document.getElementById('idleWn'),
+  idleB: document.getElementById('idleB'),
+  idleBn: document.getElementById('idleBn'),
   cheatBar: document.getElementById('cheatBar'),
   cheatIn: document.getElementById('cheatIn')
 };
@@ -7743,6 +7758,48 @@ function refreshSpectate() {
     ' &nbsp;&bull;&nbsp; vision <b>' + (G.godMode ? 'ALL' : 'Accord only') + '</b> <span style="opacity:.7">(V)</span>';
 }
 
+/* A Laborer with no order at all. Deliberately NOT "not currently swinging":
+   a worker walking back to the hall with a load is busy, and flagging it would
+   make the counter useless noise. */
+function idleWorkers(p) {
+  const out = [];
+  const ents = G.ents;
+  for (let i = 0; i < ents.length; i++) {
+    const e = ents[i];
+    if (!e.dead && e.kind === 'unit' && e.owner === p.id && e.def.worker && !e.order) out.push(e);
+  }
+  return out;
+}
+/* A finished building that can train or research and is doing neither. The
+   Altar counts only when it has no hero out and nothing queued, since an Altar
+   whose hero is alive has nothing it ought to be doing. */
+function idleProducers(p) {
+  const out = [];
+  const ents = G.ents;
+  for (let i = 0; i < ents.length; i++) {
+    const b = ents[i];
+    if (b.dead || b.kind !== 'building' || b.owner !== p.id || !b.built) continue;
+    if (b.queue && b.queue.length) continue;
+    if (b.upKind || b.reviveTotal > 0) continue;
+    const canTrain = b.def.trains && b.def.trains.length;
+    const canResearch = b.type === 'smith';
+    if (!canTrain && !canResearch) continue;
+    out.push(b);
+  }
+  return out;
+}
+function cycleIdle(which) {
+  const p = G.players[0];
+  const list = which === 'worker' ? idleWorkers(p) : idleProducers(p);
+  if (!list.length) { sfx('nope'); return; }
+  input.idleIdx = input.idleIdx || {};
+  const i = (input.idleIdx[which] || 0) % list.length;
+  input.idleIdx[which] = i + 1;
+  const e = list[i];
+  G.sel = [e]; afterSelect(); sfx('select');
+  centerCam(e.x, e.y);
+}
+
 function refreshTop() {
   const p = G.players[0];
   EL.rGold.textContent = Math.floor(p.gold);
@@ -7757,6 +7814,11 @@ function refreshTop() {
   EL.dnorb.style.background = night ? 'radial-gradient(circle at 35% 35%,#cfd8ff,#4a5a90)' : 'radial-gradient(circle at 35% 35%,#fff3c4,#e8a63a)';
   EL.dntxt.textContent = night ? 'Night' : 'Day';
   EL.dntxt.style.color = night ? '#aebbe8' : '#ffd98a';
+  const iw = idleWorkers(p).length, ib = idleProducers(p).length;
+  EL.idleWn.textContent = iw;
+  EL.idleW.classList.toggle('show', iw > 0);
+  EL.idleBn.textContent = ib;
+  EL.idleB.classList.toggle('show', ib > 0);
 }
 
 /* ---------- portrait ---------- */
@@ -8585,6 +8647,8 @@ window.addEventListener('keydown', (ev) => {
     } else addMsg('You have no hero. Build an Altar of Embers.');
     return;
   }
+  if (key === '`') { ev.preventDefault(); cycleIdle('worker'); return; }
+  if (key === '\\') { ev.preventDefault(); cycleIdle('building'); return; }
   if (key === ' ') {
     ev.preventDefault();
     if (G.lastAlertX) centerCam(G.lastAlertX, G.lastAlertY);
@@ -8953,7 +9017,8 @@ function helpHTML() {
     '<b>A then click</b><span>Attack-move (engages anything on the way).</span>' +
     '<b>S / H / P</b><span>Stop / Hold position / Patrol.</span>' +
     '<b>M / B / R / G</b><span>Move / Build menu / Repair / Gather.</span>' +
-    '<b>V</b><span>Footman Shield Wall (toggle).</span>' +
+    '<b>V</b><span>Footman Shield Wall (toggle). <b>D</b> toggles caster Mend.</span>' +
+    '<b>` / \\</b><span>Jump to the next idle Laborer / idle building. The counters in the top bar appear only when something is idle, and can be clicked.</span>' +
     '<b>Q / E / R</b><span>Hero abilities. <b>L</b> spends a skill point. <b>Z X C V</b> use inventory slots 1-4.</span>' +
     '<b>Ctrl+1..9</b><span>Assign control group. <b>1..9</b> recalls it; press twice to centre the camera on it.</span>' +
     '<b>F1</b><span>Select your hero (twice to centre on them). <b>Space</b> jumps to the last alert. <b>Tab</b> finds an idle Laborer.</span>' +
@@ -9042,6 +9107,8 @@ document.getElementById('btnWatch').addEventListener('click', () => {
     { selfPlay: true, godMode: true, players: selOpp + 1 });
 });
 document.getElementById('btnHelp').addEventListener('click', openHelp);
+EL.idleW.addEventListener('click', () => cycleIdle('worker'));
+EL.idleB.addEventListener('click', () => cycleIdle('building'));
 document.getElementById('btnHelp2').addEventListener('click', openHelp);
 document.getElementById('btnHelp3').addEventListener('click', openHelp);
 document.getElementById('btnMenu').addEventListener('click', () => {

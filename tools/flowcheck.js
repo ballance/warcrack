@@ -142,5 +142,20 @@ seen = countMsgs(() => {
 });
 ok(Object.keys(seen).some(isRefusal), 'a human seat with no gold is still told why');
 
+// Idle counters must be silent when nothing is idle, or they are just noise.
+A.startGame('FLOW-IDLE', 'normal', { players: 4 });
+A.refreshTop();
+const wn = global.document.getElementById('idleW');
+const bn = global.document.getElementById('idleB');
+ok(!wn.classList.contains('show'), 'a fresh game shows no idle-worker badge');
+for (const u of A.playerUnits(G.g.players[0])) if (u.def.worker) A.setOrder(u, null);
+A.refreshTop();
+ok(wn.classList.contains('show'), 'stopping every Laborer raises the idle-worker badge');
+// String(): a real DOM coerces textContent, the harness stub stores it raw.
+ok(String(global.document.getElementById('idleWn').textContent) === '5', 'and counts all five');
+const h4 = A.playerBuildings(G.g.players[0]).find(b => b.def.dropoff);
+A.queueUnit(h4, 'laborer'); A.refreshTop();
+ok(!bn.classList.contains('show'), 'a hall with something queued is not idle');
+
 console.log(fail ? '\n' + fail + ' CHECK(S) FAILED' : '\nALL PLAYER-FLOW CHECKS PASSED');
 process.exit(fail ? 1 : 0);
