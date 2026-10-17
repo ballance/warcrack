@@ -391,7 +391,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-17 · wilds';
+const BUILD = '2026-10-17 · wilds2';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -9170,9 +9170,12 @@ function helpHTML() {
     '<b>Camera</b><span>Arrow keys, WASD, screen-edge scroll, mouse wheel to zoom, or click/drag the minimap. ' +
     'WASD is ignored when that letter is a command on the current card — the arrow keys always pan.</span>' +
     '<b>Esc</b><span>Cancel placement/targeting, then open the menu. <b>F10</b> shows this page.</span>' +
-    '<b>Watch AI vs AI</b><span>On the title screen. Both sides play themselves with the whole map revealed. ' +
-    'While spectating: <b>[</b> and <b>]</b> change simulation speed, <b>V</b> toggles full vision. ' +
-    'The reveal is for your screen only &mdash; neither commander can see through it.</span>' +
+    '<b>[ and ]</b><span>Slow down / speed up the simulation, through 1&times;, 2&times;, 4&times; and 8&times;. ' +
+    'Works in a normal game as well as while spectating.</span>' +
+    '<b>Watch AI vs AI</b><span>On the title screen: every seat plays itself with the whole map revealed. ' +
+    'Typing <b>spectate</b> in the command bar hands over your seat mid-game instead. ' +
+    'While spectating, <b>V</b> toggles full vision. ' +
+    'The reveal is for your screen only &mdash; no commander can see through it.</span>' +
     '</div>';
   h += '<h3>Economy</h3><div class="kgrid">' +
     '<b>Gold</b><span>Laborers carry ' + CONFIG.goldPerTrip + ' per trip; at most ' + CONFIG.mineSlots + ' may work one seam.</span>' +
