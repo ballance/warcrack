@@ -103,7 +103,14 @@ function makeEl(tag, id) {
         else if (on) this._s.add(c); else this._s.delete(c);
       }
     },
-    addEventListener() { }, removeEventListener() { }, focus() { }, blur() { },
+    _ev: null,
+    addEventListener(type, fn) { if (!this._ev) this._ev = {}; (this._ev[type] = this._ev[type] || []).push(fn); },
+    removeEventListener(type, fn) {
+      if (!this._ev || !this._ev[type]) return;
+      const i = this._ev[type].indexOf(fn);
+      if (i >= 0) this._ev[type].splice(i, 1);
+    },
+    focus() { }, blur() { },
     appendChild(c) { this.childNodes.push(c); c.parentNode = this; return c; },
     removeChild(c) {
       const i = this.childNodes.indexOf(c);
@@ -116,6 +123,34 @@ function makeEl(tag, id) {
     get firstChild() { return this.childNodes[0] || null; }
   };
   return el;
+}
+
+/* Input was the one part of the game with no test coverage, because the stubs
+   swallowed every listener. These record them instead, so a test can press a
+   key or drag the mouse and assert on what happened. */
+function listenerHub() {
+  const ev = {};
+  return {
+    _ev: ev,
+    addEventListener(type, fn) { (ev[type] = ev[type] || []).push(fn); },
+    removeEventListener(type, fn) {
+      if (!ev[type]) return;
+      const i = ev[type].indexOf(fn);
+      if (i >= 0) ev[type].splice(i, 1);
+    }
+  };
+}
+function fireOn(target, type, props) {
+  const bag = target && target._ev;
+  if (!bag || !bag[type]) return 0;
+  const e = Object.assign({
+    type: type, preventDefault() { }, stopPropagation() { },
+    shiftKey: false, ctrlKey: false, metaKey: false, altKey: false,
+    button: 0, clientX: 0, clientY: 0, deltaY: 0,
+    target: { closest: () => null }
+  }, props || {});
+  for (const fn of bag[type].slice()) fn(e);
+  return bag[type].length;
 }
 
 const EXPORTS = `
@@ -136,19 +171,23 @@ const EXPORTS = `
 function load(opts) {
   const root = (opts && opts.root) || path.join(__dirname, '..');
   const els = {};
+  const docHub = listenerHub();
   global.document = {
     getElementById(id) { if (!els[id]) els[id] = makeEl(id.match(/world|portrait|minimap/) ? 'canvas' : 'div', id); return els[id]; },
     createElement: (tag) => makeEl(tag),
     querySelectorAll: () => [],
     activeElement: null,
-    addEventListener() { }
+    addEventListener(type, fn) { (docHub._ev[type] = docHub._ev[type] || []).push(fn); },
+    removeEventListener(type, fn) { docHub.removeEventListener(type, fn); },
+    _ev: null
   };
-  global.window = {
+  global.document._ev = docHub._ev;
+  const winHub = listenerHub();
+  global.window = Object.assign(winHub, {
     innerWidth: 1600, innerHeight: 900, devicePixelRatio: 1,
-    addEventListener() { }, removeEventListener() { },
     matchMedia: () => ({ matches: false }),
     AudioContext: FakeAudioContext, webkitAudioContext: FakeAudioContext
-  };
+  });
   global.performance = { now: () => Date.now() };
   global.requestAnimationFrame = () => 0;
   // navigator is a read-only getter on globalThis in modern Node; the game never
@@ -165,6 +204,10 @@ function load(opts) {
 
   const world = document.getElementById('world');
   world.width = 1600; world.height = 900;
+  // The HUD's real height comes from CSS (176px). The generic element stub
+  // reports 60, which quietly made every hudH() calculation wrong headlessly —
+  // including the zoom floor, which is derived from the usable view height.
+  document.getElementById('hud').offsetHeight = 176;
   document.getElementById('portrait').width = 76;
   document.getElementById('portrait').height = 76;
   document.getElementById('minimap').width = 96;
@@ -173,7 +216,23 @@ function load(opts) {
   // eslint-disable-next-line no-eval
   eval(html.slice(a, b) + EXPORTS);
   const A = globalThis.__emberfall;
-  return { A, G: { get g() { return A.getG(); } } };
+  const ui = {
+    /* fire('world', 'mousedown', {clientX: 10}) etc. 'window' and 'document'
+       are valid target names too. */
+    fire(target, type, props) {
+      const t = target === 'window' ? global.window
+              : target === 'document' ? global.document
+              : document.getElementById(target);
+      return fireOn(t, type, props);
+    },
+    key(k, props) {
+      fireOn(global.window, 'keydown', Object.assign({ key: k }, props || {}));
+      fireOn(global.window, 'keyup', Object.assign({ key: k }, props || {}));
+    },
+    keyDown(k, props) { fireOn(global.window, 'keydown', Object.assign({ key: k }, props || {})); },
+    keyUp(k, props) { fireOn(global.window, 'keyup', Object.assign({ key: k }, props || {})); }
+  };
+  return { A, G: { get g() { return A.getG(); } }, ui };
 }
 
 module.exports = { load, makeEl, fakeCtx, FakeAudioContext };
