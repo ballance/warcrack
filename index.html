@@ -364,7 +364,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-16 · fourclaims';
+const BUILD = '2026-10-17 · quiet';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -2307,9 +2307,9 @@ function abilityReady(h, key) {
 }
 function startCast(h, key, target, x, y) {
   const a = ABIL[key], r = h.ranks[key];
-  if (r <= 0) { if (h.owner === 0) addMsg(a.name + ' is not learned yet.'); return false; }
-  if (h.abilCd[key] > 0) { if (h.owner === 0) addMsg(a.name + ' is still recharging.'); return false; }
-  if (h.mana < a.mana[r - 1]) { if (h.owner === 0) addMsg('Not enough mana for ' + a.name + '.'); return false; }
+  if (r <= 0) { if (isPlayerSeat(h.owner)) addMsg(a.name + ' is not learned yet.'); return false; }
+  if (h.abilCd[key] > 0) { if (isPlayerSeat(h.owner)) addMsg(a.name + ' is still recharging.'); return false; }
+  if (h.mana < a.mana[r - 1]) { if (isPlayerSeat(h.owner)) addMsg('Not enough mana for ' + a.name + '.'); return false; }
   setOrder(h, { t: 'cast', key: key, target: target || null, x: x, y: y, range: a.range });
   return true;
 }
@@ -2409,7 +2409,7 @@ function createHero(p, x, y) {
 function pickUpItem(h, it) {
   if (!h.items) return false;
   const slot = h.items.indexOf(null);
-  if (slot < 0) { if (h.owner === 0) addMsg('Inventory is full.'); return false; }
+  if (slot < 0) { if (isPlayerSeat(h.owner)) addMsg('Inventory is full.'); return false; }
   h.items[slot] = it.type;
   removeEntity(it);
   if (h.owner === 0) { sfx('pickup'); addMsg('Picked up ' + ITEMS[it.type].name + '.'); }
@@ -2470,15 +2470,15 @@ function startConstruction(type, tx, ty, workers, owner) {
   const p = G.players[owner];
   const c = buildCost(type);
   if (!canAfford(p, c.gold, c.lumber)) {
-    if (owner === 0) { addMsg('Not enough ' + (p.gold < c.gold ? 'gold' : 'lumber') + '.'); sfx('nope'); }
+    if (isPlayerSeat(owner)) { addMsg('Not enough ' + (p.gold < c.gold ? 'gold' : 'lumber') + '.'); sfx('nope'); }
     return null;
   }
   if (!buildingRequirementsMet(p, type)) {
-    if (owner === 0) { addMsg(BUILDINGS[type].name + ' requires a Keep.'); sfx('nope'); }
+    if (isPlayerSeat(owner)) { addMsg(BUILDINGS[type].name + ' requires a Keep.'); sfx('nope'); }
     return null;
   }
   if (!canPlaceAt(type, tx, ty, owner)) {
-    if (owner === 0) { addMsg('Cannot build there.'); sfx('nope'); }
+    if (isPlayerSeat(owner)) { addMsg('Cannot build there.'); sfx('nope'); }
     return null;
   }
   pay(p, c.gold, c.lumber);
@@ -2509,6 +2509,19 @@ function completeBuilding(b) {
 }
 
 function aiRun(owner) { return !!(G.ais && G.ais[owner]); }
+/* Is a person actually driving this seat?
+ *
+ * Refusal feedback — the error chime and "Not enough gold." — answers a
+ * command, so it belongs to whoever gave the command. Seat 0 is normally the
+ * player, but spectate mode and Watch AI vs AI hand seat 0 to an AI, and
+ * gating on `owner === 0` then rang the chime for every purchase the AI tried
+ * and could not afford: measured at 678 of them in eight game-minutes, about
+ * 1.4 a second, which is the thumping you could hear.
+ *
+ * Outcome messages are deliberately NOT gated this way. "Your forces are under
+ * attack" and "Farm complete" are worth seeing while spectating, because they
+ * report what happened rather than refusing something you never asked for. */
+function isPlayerSeat(owner) { return owner === 0 && !aiRun(owner); }
 function trainTime(type, owner) {
   return UNITS[type].buildTime * (aiRun(owner) ? G.diff.trainMul : 1);
 }
@@ -2518,11 +2531,11 @@ function queueUnit(b, type) {
   if (!b.built) return false;
   if (b.queue.length >= 7) { if (b.owner === 0) addMsg('Queue is full.'); return false; }
   if (!canAfford(p, d.gold, d.lumber)) {
-    if (b.owner === 0) { addMsg('Not enough ' + (p.gold < d.gold ? 'gold' : 'lumber') + '.'); sfx('nope'); }
+    if (isPlayerSeat(b.owner)) { addMsg('Not enough ' + (p.gold < d.gold ? 'gold' : 'lumber') + '.'); sfx('nope'); }
     return false;
   }
   if (p.foodUsed + p.foodQueued + d.food > p.foodCap) {
-    if (b.owner === 0) { addMsg('Not enough food — build a Farm.'); sfx('nope'); }
+    if (isPlayerSeat(b.owner)) { addMsg('Not enough food — build a Farm.'); sfx('nope'); }
     return false;
   }
   pay(p, d.gold, d.lumber);
@@ -2588,8 +2601,8 @@ function startUpgradeResearch(b, kind) {
   if (lvl >= u.levels.length) return false;
   if (b.upKind) { if (b.owner === 0) addMsg('Already researching.'); return false; }
   const L = u.levels[lvl];
-  if (L.req === 'keep' && !p.hasKeep) { if (b.owner === 0) { addMsg(u.name + ' level 2 requires a Keep.'); sfx('nope'); } return false; }
-  if (!canAfford(p, L.gold, L.lumber)) { if (b.owner === 0) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
+  if (L.req === 'keep' && !p.hasKeep) { if (isPlayerSeat(b.owner)) { addMsg(u.name + ' level 2 requires a Keep.'); sfx('nope'); } return false; }
+  if (!canAfford(p, L.gold, L.lumber)) { if (isPlayerSeat(b.owner)) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
   pay(p, L.gold, L.lumber);
   b.upKind = kind; b.upT = 0; b.upTotal = L.time * (aiRun(b.owner) ? G.diff.trainMul : 1);
   if (b.owner === 0) sfx('ack');
@@ -2599,7 +2612,7 @@ function startKeepUpgrade(b) {
   const p = G.players[b.owner];
   const d = BUILDINGS.keep;
   if (b.type !== 'hall' || b.upKind || !b.built || b.dead) return false;
-  if (!canAfford(p, d.gold, d.lumber)) { if (b.owner === 0) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
+  if (!canAfford(p, d.gold, d.lumber)) { if (isPlayerSeat(b.owner)) { addMsg('Not enough resources.'); sfx('nope'); } return false; }
   pay(p, d.gold, d.lumber);
   b.upKind = 'keep'; b.upT = 0; b.upTotal = d.time * (aiRun(b.owner) ? G.diff.buildMul : 1);
   if (b.owner === 0) sfx('ack');
@@ -2625,7 +2638,7 @@ function startRevive(b) {
     return true;
   }
   const cost = heroReviveCost(p);
-  if (!canAfford(p, cost, 0)) { if (b.owner === 0) { addMsg('Need ' + cost + ' gold to revive.'); sfx('nope'); } return false; }
+  if (!canAfford(p, cost, 0)) { if (isPlayerSeat(b.owner)) { addMsg('Need ' + cost + ' gold to revive.'); sfx('nope'); } return false; }
   pay(p, cost, 0);
   b.reviveT = 0; b.reviveTotal = CONFIG.heroReviveTime;
   if (b.owner === 0) sfx('ack');

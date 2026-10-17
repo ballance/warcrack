@@ -111,5 +111,36 @@ g = G.g;
 ok(g.state === 'play', 'one opponent being destroyed does not end the game');
 ok(g.players[2].eliminated, 'that opponent is marked out');
 
+// Refusal feedback belongs to whoever gave the command. Spectate and Watch AI
+// vs AI hand seat 0 to an AI, and gating these on `owner === 0` rang the error
+// chime for every purchase it tried and could not afford -- 678 of them in
+// eight game-minutes. Outcome messages must survive; refusals must not.
+const msgs = global.document.getElementById('msgs');
+function countMsgs(fn) {
+  const seen = {};
+  const orig = msgs.appendChild.bind(msgs);
+  msgs.appendChild = (c) => { seen[c.textContent] = (seen[c.textContent] || 0) + 1; return orig(c); };
+  try { fn(); } finally { msgs.appendChild = orig; }
+  return seen;
+}
+const isRefusal = (t) => /Not enough|Cannot build|requires a Keep|to revive|Inventory is full|recharging|not learned/.test(t);
+
+let seen = countMsgs(() => {
+  A.startGame('FLOW-QUIET', 'normal', { players: 4, selfPlay: true });
+  for (let i = 0; i < 6 * 60 * 30; i++) A.simTick();
+});
+let refusals = Object.keys(seen).filter(isRefusal).reduce((a, k) => a + seen[k], 0);
+ok(refusals === 0, 'AI-vs-AI emits no refusal messages (' + refusals + ')');
+ok(Object.keys(seen).length > 0, 'AI-vs-AI still reports outcomes (' + Object.keys(seen).length + ' kinds)');
+
+seen = countMsgs(() => {
+  A.startGame('FLOW-SKINT', 'normal', { players: 4 });
+  const gp = G.g.players[0];
+  gp.gold = 0; gp.lumber = 0;
+  const h3 = A.playerBuildings(gp).find(b => b.def.dropoff);
+  A.queueUnit(h3, 'laborer');
+});
+ok(Object.keys(seen).some(isRefusal), 'a human seat with no gold is still told why');
+
 console.log(fail ? '\n' + fail + ' CHECK(S) FAILED' : '\nALL PLAYER-FLOW CHECKS PASSED');
 process.exit(fail ? 1 : 0);
