@@ -343,7 +343,19 @@ const CONFIG = {
      The food grant keeps the platoon out of upkeep brackets it would otherwise
      sit in from the first second. */
   limitedPlatoon: { footman: 4, archer: 3, adept: 1 },
-  limitedFood: 26,    // how far a Laborer will look for a seam on its own
+  limitedFood: 26,
+
+  /* Pacing. Four-way games were resolving around 14 minutes against an
+     intended 25-30, and the cause is simply that things die quickly: once a
+     side's army breaks, its base follows in under a minute. These scale the
+     health of units and of buildings so fights and sieges both take longer,
+     without touching a single damage number — the counter table and every
+     unit's role stay exactly as tuned. */
+  // Swept against median game length over 18 seeds a step: 1.0/1.0 gave 14
+  // minutes, 1.25/1.4 gave 18, 1.45/1.9 gave 21, and these give 24-26 with
+  // nothing left unresolved at a 45-minute cap. The intended length is 25-30.
+  unitHpMul: 1.6,
+  buildingHpMul: 2.2,    // how far a Laborer will look for a seam on its own
   mineTime: 2.0,          // seconds inside the mine per trip
   chopTime: 2.0,          // seconds per chop
   mineGold: 13500,
@@ -395,7 +407,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-18 · evenground';
+const BUILD = '2026-10-18 · pacing';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -493,7 +505,7 @@ const BUILDINGS = {
     desc: 'Heart of the settlement. Trains Laborers, accepts gold and lumber, grants 10 Food.'
   },
   keep: {
-    name: 'Keep', alt: { thorn: 'Great Rootmound', fen: 'Great Fenmoot', gloam: 'Great Gloamvault' }, gold: 320, lumber: 160, time: 70,
+    name: 'Keep', alt: { thorn: 'Great Rootmound', fen: 'Great Fenmoot', gloam: 'Great Gloamvault' }, gold: 230, lumber: 110, time: 60,
     hp: 2000, tw: 4, th: 4, sight: 11, armor: 6, armorType: 'fortified',
     food: CONFIG.hallFood, hotkey: 'K', trains: ['laborer'], dropoff: true, upgradeOnly: true, icon: '⌂',
     desc: 'An improved Town Hall. Unlocks tier two: Workshop and advanced forging.'
@@ -1227,7 +1239,7 @@ function spawnUnit(type, owner, x, y) {
   const u = {
     id: uid(), kind: 'unit', type: type, owner: owner, def: d,
     x: x, y: y, px: x, py: y, radius: d.radius, hitR: d.radius,
-    hp: d.hp, maxHp: d.hp, armor: d.armor, armorTypeName: d.armorType,
+    hp: d.hp * CONFIG.unitHpMul, maxHp: d.hp * CONFIG.unitHpMul, armor: d.armor, armorTypeName: d.armorType,
     sight: d.sight, speed: d.speed,
     facing: Math.atan2(WORLD * 0.5 - y, WORLD * 0.5 - x), anim: Math.random() * 10,
     order: null, path: null, pathI: 0, needPath: false, wantX: x, wantY: y,
@@ -1261,7 +1273,8 @@ function spawnBuilding(type, owner, tx, ty, instant) {
     x: tx * TILE + d.tw * TILE / 2, y: ty * TILE + d.th * TILE / 2,
     bx0: tx * TILE, by0: ty * TILE, bx1: (tx + d.tw) * TILE, by1: (ty + d.th) * TILE,
     hitR: Math.max(d.tw, d.th) * TILE * 0.5,
-    maxHp: d.hp, hp: instant ? d.hp : Math.max(1, d.hp * 0.1),
+    maxHp: d.hp * CONFIG.buildingHpMul,
+    hp: (instant ? d.hp : Math.max(1, d.hp * 0.1)) * CONFIG.buildingHpMul,
     armor: d.armor, armorTypeName: d.armorType, sight: d.sight,
     built: !!instant, buildProg: instant ? 1 : 0, builders: 0,
     dead: false, hitFlash: 0, inside: false,
@@ -3233,7 +3246,11 @@ function makeAI(p) {
       }
       if (underCon >= (G.diff.micro >= 2 ? 3 : 2)) return;
       if (any('smith') === 0 && built('barracks') >= 1 && p.gold > 300) { if (this.tryBuild('smith', 4 * TILE, 9 * TILE)) return; }
-      if (!p.hasKeep && workers >= 10 && p.gold > 420 && p.lumber > 200) {
+      // Lowered with the Keep's price. Tier two gates the Workshop, which gates
+      // the Siege Cart, which is the only answer to a Guard Tower — so a Keep
+      // only four sides in five ever reached was quietly keeping three pieces
+      // of content off the board at once.
+      if (!p.hasKeep && workers >= 8 && p.gold > 300 && p.lumber > 140) {
         const hall = bs.find(b => b.type === 'hall' && b.built && !b.upKind);
         if (hall && startKeepUpgrade(hall)) return;
       }
@@ -3251,6 +3268,27 @@ function makeAI(p) {
       const workers = countUnits(p, 'laborer');
       const halls = bs.filter(b => b.def.dropoff && !b.upKind);
       const foodLeft = p.foodCap - p.foodUsed - p.foodQueued;
+
+      // Research FIRST, before a single soldier is queued.
+      //
+      // It used to run last, and measured across 24 games the AI bought 1.6
+      // upgrades out of 6 in a whole match while holding a Blacksmith 80% of
+      // the time. Gold was never the problem — sides gathered over 7,000 — but
+      // by the time this ran, unit production had already spent it, so the
+      // check for spare gold and lumber almost never passed. A Blacksmith can
+      // only research one thing at a time and each takes 40-55 seconds, so
+      // giving it first claim costs the army far less than it looks.
+      const smith = bs.find(b => b.type === 'smith' && !b.upKind);
+      if (smith && p.gold > 180 && p.lumber > 90) {
+        const order = ['armor', 'melee', 'ranged'];
+        for (const k of order) {
+          if (p.upg[k] < UPGRADES[k].levels.length) {
+            const L = UPGRADES[k].levels[p.upg[k]];
+            if (L.req === 'keep' && !p.hasKeep) continue;
+            if (startUpgradeResearch(smith, k)) break;
+          }
+        }
+      }
 
       // In limited forces there is nothing to train, so the whole production
       // block is skipped rather than left to fail call by call.
@@ -3288,18 +3326,6 @@ function makeAI(p) {
       const altar = bs.find(b => b.type === 'altar');
       if (altar && !p.hero && altar.reviveTotal <= 0) {
         if (!p.heroSave || p.gold > heroReviveCost(p) + 120) startRevive(altar);
-      }
-      // research
-      const smith = bs.find(b => b.type === 'smith' && !b.upKind);
-      if (smith && p.gold > 250 && p.lumber > 120) {
-        const order = ['armor', 'melee', 'ranged'];
-        for (const k of order) {
-          if (p.upg[k] < UPGRADES[k].levels.length) {
-            const L = UPGRADES[k].levels[p.upg[k]];
-            if (L.req === 'keep' && !p.hasKeep) continue;
-            if (startUpgradeResearch(smith, k)) break;
-          }
-        }
       }
     },
 
