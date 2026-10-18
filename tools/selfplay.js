@@ -52,6 +52,10 @@ function sample(g, peaks) {
     if (h > peaks[id].hero) peaks[id].hero = h;
     const u = p.upg.melee + p.upg.ranged + p.upg.armor;
     if (u > peaks[id].upgrades) peaks[id].upgrades = u;
+    // beasts bought from a wild camp: a creep type under a player's flag
+    let hired = 0;
+    for (const e of A.playerUnits(p)) if (e.def.creep && !e.creep) hired++;
+    if (hired > peaks[id].hired) peaks[id].hired = hired;
     if (p.hasKeep) peaks[id].keep = 1;
   }
 }
@@ -62,7 +66,7 @@ function freshPeaks(np) {
     const units = {}, builds = {};
     for (const t of UNIT_TYPES) units[t] = 0;
     for (const t of BUILD_TYPES) builds[t] = 0;
-    return { units, builds, foodPeak: 0, hero: 0, upgrades: 0, keep: 0 };
+    return { units, builds, foodPeak: 0, hero: 0, upgrades: 0, keep: 0, hired: 0 };
   });
 }
 
@@ -73,6 +77,7 @@ function snapshotSide(g, id, peak) {
     gold: Math.round(p.stats.gold), lumber: Math.round(p.stats.lumber),
     trained: p.stats.trained, kills: p.stats.kills, lost: p.stats.lost, razed: p.stats.razed,
     hero: peak.hero, keep: peak.keep, upgrades: peak.upgrades, foodPeak: peak.foodPeak,
+    hired: peak.hired,
     units, builds
   };
 }
@@ -187,15 +192,26 @@ line('  peak food       ' + mean(allSides.map(s => s.foodPeak)).toFixed(1) + ' o
 line('  hero level      ' + mean(allSides.map(s => s.hero)).toFixed(1) + ' of 10');
 line('  reached Keep    ' + (mean(allSides.map(s => s.keep)) * 100).toFixed(0) + '% of sides');
 line('  upgrades bought ' + mean(allSides.map(s => s.upgrades)).toFixed(1) + ' of 6');
+line('  wild beasts hired ' + mean(allSides.map(s => s.hired)).toFixed(1) +
+     '   (any at all: ' + (allSides.filter(s => s.hired > 0).length / allSides.length * 100).toFixed(0) + '% of sides)');
 
 line('\n-- Findings --');
 const notes = [];
-if (total >= 8 && (pct < 50 - 1.96 * Math.sqrt(0.25 / total) * 100 || pct > 50 + 1.96 * Math.sqrt(0.25 / total) * 100))
-  notes.push('One side is winning more than chance allows. A ~30/70 split was traced once before ' +
-    'to nearestPassable returning the first tile of its ring scan rather than the closest, which ' +
-    'drifted every spawn, revive and A* goal-snap north-west. Check placement helpers for a fixed ' +
-    'compass direction first; ruled out previously were terrain symmetry, map position (--swap), ' +
-    'AI tick order, entity creation order and the fog build rule.');
+// Seat skew, multinomial. Left over from the two-seat version this read `pct`,
+// which no longer exists — it threw at the end of every run, after printing
+// everything above it, which is why it survived unnoticed.
+if (total >= 8) {
+  const expWins = total / SEATS, seWins = Math.sqrt(expWins * (1 - 1 / SEATS));
+  let worstDev = 0;
+  for (let i = 0; i < SEATS; i++) worstDev = Math.max(worstDev, Math.abs(wins[i] - expWins));
+  if (worstDev > 2 * seWins) {
+    notes.push('One seat is winning more than chance allows. Two causes have been found before, ' +
+      'both tie-breaks: nearestPassable returning the first tile of its ring scan rather than the ' +
+      'closest (drifting every spawn and revive north-west), and target selection breaking an ' +
+      'exact distance tie by lowest index, which left two seats never hunted at all. Check ' +
+      'tie-breaks and placement helpers before suspecting strategy.');
+  }
+}
 if (unresolved / games.length > 0.15)
   notes.push(Math.round(unresolved / games.length * 100) + '% of games never resolve. Either sieges stall against towers, or neither AI can finish a crippled opponent.');
 for (const t of UNIT_TYPES) {
@@ -208,6 +224,8 @@ for (const t of BUILD_TYPES) {
 }
 const avgFood = mean(allSides.map(s => s.foodPeak));
 if (avgFood < 45) notes.push('Peak food averages ' + avgFood.toFixed(0) + ' of 80. Games end before upkeep tiers bite, so that whole mechanic is rarely exercised.');
+const hiredAny = allSides.filter(s => s.hired > 0).length / allSides.length;
+if (hiredAny < 0.25) notes.push('Only ' + Math.round(hiredAny * 100) + '% of sides ever hire a wild camp — close to dead content as the AI plays.');
 const avgHero = mean(allSides.map(s => s.hero));
 if (avgHero < 5) notes.push('Heroes average level ' + avgHero.toFixed(1) + ' of 10. The upper half of the hero progression almost never happens.');
 if (!notes.length) notes.push('Nothing stood out: fairness within chance, no dead units or buildings, economy and progression all exercised.');

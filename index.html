@@ -395,7 +395,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-17 · handtool';
+const BUILD = '2026-10-18 · evenground';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -779,7 +779,13 @@ function genMap(seedText) {
     { x: 54, y: 72, tier: 3 }                        // the contested centre ring
   ];
   const camps = [];
-  for (const c of campDefs) for (const q of rots(c)) camps.push({ x: q.x, y: q.y, tier: c.tier });
+  // The turn index travels with the camp: rots() returns the four quarter
+  // turns in order, and the creeps inside a camp have to be laid out with the
+  // same rotation as the ground they stand on.
+  for (const c of campDefs) {
+    const r4 = rots(c);
+    for (let k = 0; k < r4.length; k++) camps.push({ x: r4[k].x, y: r4[k].y, tier: c.tier, turn: k });
+  }
 
   /* ---- terrain features: rolled in one quadrant, stamped four times ---- */
   const rollQ = () => MHALF + ((rnd() * (M - MHALF - 8)) | 0);
@@ -938,16 +944,36 @@ const DIRC = [1, 1, 1, 1, 1.41421356, 1.41421356, 1.41421356, 1.41421356];
    skipped. Everything that falls back to this drifted north-west: unit spawns,
    hero revives, creep camps, A* start/goal snapping. It now keeps the closest
    candidate in the ring instead of the first. */
+/* Closest passable tile to (tx,ty).
+ *
+ * The tie-break matters more than it looks. This used to return the first tile
+ * of the ring scan, which drifted every spawn and revive north-west; that was
+ * fixed to take the nearest. But EXACT ties are common — at radius 1 the four
+ * orthogonals are all distance 1 — and a strict `<` still handed those to
+ * whichever the scan reached first, which is again always the north-west side.
+ *
+ * A fixed compass preference cannot be fair on this map. The board is only
+ * symmetric under a quarter turn, so the terrain around each start is the
+ * others rotated; a helper that always leans north leans into a different
+ * local feature at each corner. Breaking ties toward the map centre instead is
+ * invariant under that same quarter turn, so all four corners resolve a tie
+ * the same way. It also matches what spawning already does deliberately
+ * elsewhere, which is to step out toward the middle.
+ */
 function nearestPassable(tx, ty, maxR) {
   if (passable(tx, ty)) return ti(tx, ty);
+  const mc = (M - 1) * 0.5;
   for (let r = 1; r <= maxR; r++) {
-    let best = -1, bestD = Infinity;
+    let best = -1, bestD = Infinity, bestC = Infinity;
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         if (!passable(tx + dx, ty + dy)) continue;
         const d = dx * dx + dy * dy;
-        if (d < bestD) { bestD = d; best = ti(tx + dx, ty + dy); }
+        if (d > bestD) continue;
+        const ox = tx + dx - mc, oy = ty + dy - mc;
+        const c = ox * ox + oy * oy;
+        if (d < bestD || c < bestC) { bestD = d; bestC = c; best = ti(tx + dx, ty + dy); }
       }
     }
     if (best >= 0) return best;
@@ -2964,7 +2990,8 @@ function hireCamp(camp, owner) {
 
 function setupCamps(defs) {
   for (const d of defs) {
-    const camp = { x: t2w(d.x), y: t2w(d.y), tier: d.tier, units: [], respawnT: 0, cleared: false };
+    const camp = { x: t2w(d.x), y: t2w(d.y), tier: d.tier, turn: d.turn || 0,
+                   units: [], respawnT: 0, cleared: false };
     G.camps.push(camp);
     spawnCampUnits(camp);
   }
@@ -2972,7 +2999,12 @@ function setupCamps(defs) {
 function spawnCampUnits(camp) {
   const comp = CAMP_COMP[camp.tier];
   for (let i = 0; i < comp.length; i++) {
-    const a = (i / comp.length) * Math.PI * 2;
+    // Rotated with the camp, for the same reason the opening workers are: the
+    // ground around each rotation of a camp is the previous one turned a
+    // quarter, so a fixed absolute angle arranges each copy's defenders
+    // differently against its own terrain, and some copies become easier to
+    // clear than others.
+    const a = (i / comp.length) * Math.PI * 2 + (camp.turn || 0) * Math.PI / 2;
     const rr = camp.tier === 3 ? 44 : 34;
     const sp = freeSpotNear(camp.x + Math.cos(a) * rr, camp.y + Math.sin(a) * rr, 6);
     const u = spawnUnit(comp[i], NEUTRAL, sp.x, sp.y);
@@ -9011,14 +9043,22 @@ function startGame(seedText, diffKey, opts) {
   const slots = BASE_SLOTS[G.np];
   G.seatBase = [];
   for (let pid = 0; pid < G.np; pid++) {
-    const b = map.bases[slots[G.swapBases ? (pid + 1) % G.np : pid]];
+    const slot = slots[G.swapBases ? (pid + 1) % G.np : pid];
+    const b = map.bases[slot];
     G.seatBase[pid] = b;
+    // The corners are generated by repeated quarter turns, so the ground around
+    // each start is the previous one rotated. Laying the opening units out at
+    // the same ABSOLUTE angles therefore drops each seat's workers onto
+    // differently-featured ground — measurably so: it was worth about ten extra
+    // wins in eighty games to whichever corner the layout happened to suit.
+    // Rotating the layout with the corner makes every opening identical.
+    const turn = slot * Math.PI / 2;
     const hall = spawnBuilding('hall', pid, b.x - 2, b.y - 2, true);
     const p = G.players[pid];
     p.hasHall = true;
     hall.hasRally = false;
     for (let i = 0; i < CONFIG.startWorkers; i++) {
-      const a = (i / CONFIG.startWorkers) * Math.PI * 2 + 0.6;
+      const a = (i / CONFIG.startWorkers) * Math.PI * 2 + 0.6 + turn;
       const sp = freeSpotNear(hall.x + Math.cos(a) * 92, hall.y + Math.sin(a) * 92, 8);
       const u = spawnUnit('laborer', pid, sp.x, sp.y);
       // send the opening workers to the nearest seam
@@ -9034,7 +9074,7 @@ function startGame(seedText, diffKey, opts) {
       let ring = 0;
       for (const t in CONFIG.limitedPlatoon) {
         for (let k = 0; k < CONFIG.limitedPlatoon[t]; k++) {
-          const a = (ring / 9) * Math.PI * 2 + 0.3;
+          const a = (ring / 9) * Math.PI * 2 + 0.3 + turn;
           const sp = freeSpotNear(hall.x + Math.cos(a) * 128, hall.y + Math.sin(a) * 128, 10);
           spawnUnit(t, pid, sp.x, sp.y);
           ring++;
