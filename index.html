@@ -387,7 +387,7 @@ const CONFIG = {
   heroManaPerLevel: 40,
   heroManaRegen: 1.6,
   heroReviveBase: 160,
-  heroReviveLevel: 70,
+  heroReviveLevel: 55,
   heroReviveTime: 12,
 
   upgradeDmgPerLevel: 2,
@@ -407,7 +407,7 @@ const CONFIG = {
 /* Bump on every deploy. When someone reports a bug, the console line tells us
    whether they are on this build or a cached one — GitHub Pages serves with
    max-age=600, so a stale copy is the first thing to rule out. */
-const BUILD = '2026-10-18 · pacing';
+const BUILD = '2026-10-18 · reserves';
 
 const TILE = CONFIG.TILE, M = CONFIG.MAP, WORLD = TILE * M, DT = 1 / CONFIG.SIM_HZ;
 const T_GRASS = 0, T_DIRT = 1, T_WATER = 2, T_CLIFF = 3, T_FOREST = 4, T_ROCK = 5;
@@ -3269,7 +3269,53 @@ function makeAI(p) {
       const halls = bs.filter(b => b.def.dropoff && !b.upKind);
       const foodLeft = p.foodCap - p.foodUsed - p.foodQueued;
 
-      // Research FIRST, before a single soldier is queued.
+      // Hold the revive price back from everything else.
+      //
+      // Preferring the revive was not enough: measured again afterwards, the
+      // AI was holding an average of 72 gold while its hero lay dead. It
+      // spends to zero every tick, so a revive can never win a race against
+      // continuous production — it has to be reserved out of the purse rather
+      // than merely asked for first.
+      const heroDown = !p.hero && !!p.heroSave;
+      const haveAltar = bs.some(b => b.type === 'altar');
+      const reserve = (heroDown && haveAltar) ? heroReviveCost(p) : 0;
+
+      /* A Siege Cart needs the same protection, and for the same reason.
+         Moving it ahead of the barracks in the queue did nothing: measured
+         afterwards, 87% of the seconds an idle Workshop stood there the AI was
+         simply short of its 220 gold. It gathers over 9,000 a game but spends
+         it continuously on 75-135 gold units, so it never accumulates enough
+         for the expensive one. Holding the price back fixes what ordering
+         could not.
+
+         Only once there is an army to hold the line, though — a side that
+         stops making infantry early to save for artillery just dies. */
+      const soldiers = countUnits(p, 'footman') + countUnits(p, 'archer');
+      const idleShop = bs.some(b => b.type === 'workshop' && (!b.queue || !b.queue.length));
+      const holdSiege = (idleShop && soldiers >= 4 && countUnits(p, 'siege') < 4)
+        ? UNITS.siege.gold : 0;
+
+      const canSpend = (type) => {
+        const d = UNITS[type];
+        const hold = reserve + (type === 'siege' ? 0 : holdSiege);
+        return p.gold - hold >= d.gold && p.lumber >= (d.lumber || 0);
+      };
+
+      // Bring the hero back before anything else is bought.
+      //
+      // Measured: heroes were alive for only 48% of a game, and 82% of the
+      // seconds one spent dead, the AI was simply short of gold — it wanted
+      // the revive price plus a 120 reserve, and with research and soldiers
+      // taking their cut first it rarely held that. Deaths were not the
+      // problem; staying dead was. A hero carries four abilities, ten levels
+      // and four relics, so half a game without one is a large piece of the
+      // design sitting idle.
+      const altar = bs.find(b => b.type === 'altar');
+      if (altar && !p.hero && altar.reviveTotal <= 0) {
+        if (!p.heroSave || p.gold > heroReviveCost(p) + 30) startRevive(altar);
+      }
+
+      // Research next, before a single soldier is queued.
       //
       // It used to run last, and measured across 24 games the AI bought 1.6
       // upgrades out of 6 in a whole match while holding a Blacksmith 80% of
@@ -3279,7 +3325,7 @@ function makeAI(p) {
       // only research one thing at a time and each takes 40-55 seconds, so
       // giving it first claim costs the army far less than it looks.
       const smith = bs.find(b => b.type === 'smith' && !b.upKind);
-      if (smith && p.gold > 180 && p.lumber > 90) {
+      if (smith && p.gold - reserve > 180 && p.lumber > 90) {
         const order = ['armor', 'melee', 'ranged'];
         for (const k of order) {
           if (p.upg[k] < UPGRADES[k].levels.length) {
@@ -3294,7 +3340,20 @@ function makeAI(p) {
       // block is skipped rather than left to fail call by call.
       if (!G.limited) {
         for (const h of halls) {
-          if (workers + h.queue.length < G.diff.maxWorkers && h.queue.length < 2 && foodLeft >= 1) queueUnit(h, 'laborer');
+          if (workers + h.queue.length < G.diff.maxWorkers && h.queue.length < 2 && foodLeft >= 1 && canSpend('laborer')) queueUnit(h, 'laborer');
+        }
+        // Siege before infantry. Workshops finish early — a median of 5:35 —
+        // but only half the sides that owned one ever fielded a cart, because
+        // the barracks loop ran first and queued two units per building ahead
+        // of it every cycle. A Siege Cart costs more than either of them, so it
+        // lost that race every time. Same lesson as the research block above:
+        // the scarce expensive thing has to ask first.
+        const shops = bs.filter(b => b.type === 'workshop');
+        for (const b of shops) {
+          if (b.queue.length >= 1) continue;
+          if (countUnits(p, 'siege') >= 4) break;
+          if (!canSpend('siege')) break;
+          queueUnit(b, 'siege');
         }
         const barracks = bs.filter(b => b.type === 'barracks');
         const foot = countUnits(p, 'footman'), arch = countUnits(p, 'archer');
@@ -3302,13 +3361,9 @@ function makeAI(p) {
           if (b.queue.length >= 2) continue;
           if (p.foodCap - p.foodUsed - p.foodQueued < 2) break;
           const want = (foot <= arch) ? 'footman' : 'archer';
-          if (!queueUnit(b, want)) queueUnit(b, want === 'footman' ? 'archer' : 'footman');
-        }
-        const shops = bs.filter(b => b.type === 'workshop');
-        for (const b of shops) {
-          if (b.queue.length >= 1) continue;
-          if (countUnits(p, 'siege') >= 4) break;
-          queueUnit(b, 'siege');
+          const other = want === 'footman' ? 'archer' : 'footman';
+          if (canSpend(want)) { if (!queueUnit(b, want) && canSpend(other)) queueUnit(b, other); }
+          else if (canSpend(other)) queueUnit(b, other);
         }
         // Altars also train casters. Capped low on purpose: they are fragile,
         // cost three food, and a stack of them beats nothing it could not have
@@ -3319,13 +3374,9 @@ function makeAI(p) {
           if (p.foodCap - p.foodUsed - p.foodQueued < 3) break;
           if (countUnits(p, 'adept') >= 2) break;
           if (foot + arch < 4) break;             // soldiers before casters
+          if (!canSpend('adept')) break;
           queueUnit(b, 'adept');
         }
-      }
-      // altar: summon / revive the hero
-      const altar = bs.find(b => b.type === 'altar');
-      if (altar && !p.hero && altar.reviveTotal <= 0) {
-        if (!p.heroSave || p.gold > heroReviveCost(p) + 120) startRevive(altar);
       }
     },
 
